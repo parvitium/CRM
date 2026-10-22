@@ -1,0 +1,6 @@
+# Copy to .dev.vars for local `wrangler dev`. Never commit .dev.vars.
+# Dev login is local-only. Production must omit ALLOW_DEV_LOGIN.
+ALLOW_DEV_LOGIN=true
+
+# AUTH_MODE is "magic" in wrangler.jsonc. Access mode is documented in README.
+# AUTH_MODE=magic

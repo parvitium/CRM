@@ -1,0 +1,40 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "parvitium-crm",
+  "main": "src/index.ts",
+  "upload_source_maps": true,
+  "compatibility_date": "2026-10-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "head_sampling_rate": 1,
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.01,
+    },
+  },
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "parvitium-crm",
+      // Placeholder only. Replace after `wrangler d1 create parvitium-crm`.
+      // Do not omit this field — Wrangler may auto-provision a remote DB.
+      "database_id": "00000000-0000-4000-8000-000000000001",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "vars": {
+    "APP_NAME": "Parvitium CRM",
+    "AUTH_MODE": "magic",
+    "ALLOW_DEV_LOGIN": "",
+  },
+  // R2 for call recordings is planned, not bound yet:
+  // "r2_buckets": [{ "binding": "RECORDINGS", "bucket_name": "parvitium-crm-recordings" }]
+}
