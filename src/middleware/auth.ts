@@ -11,6 +11,7 @@ import {
 import { timingSafeEqual } from "../auth/crypto";
 import { AuthzError } from "../domain/authz";
 import { HttpError, wantsJson } from "../domain/http";
+import { applySecurityHeaders } from "./security";
 import type { Context } from "hono";
 import type { AppEnv } from "../app-env";
 
@@ -55,7 +56,6 @@ export const csrfMiddleware = createMiddleware<AppEnv>(async (c, next) => {
     return;
   }
   if (
-    c.req.path === "/logout" ||
     c.req.path === "/auth/magic" ||
     c.req.path === "/auth/magic/consume" ||
     c.req.path === "/auth/dev-login"
@@ -98,16 +98,19 @@ export function handleError(err: unknown, c: Context<AppEnv>): Response {
     console.error(JSON.stringify({ msg: "unhandled", error: String(err) }));
   }
   const code = status as ContentfulStatusCode;
+  let res: Response;
   if (wantsJson(c.req.raw) || c.req.path.startsWith("/api/")) {
-    return c.json({ error: message }, code);
+    res = c.json({ error: message }, code);
+  } else if (status === 401) {
+    res = c.redirect("/login");
+  } else {
+    res = c.html(
+      `<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/styles.css"><title>Error</title></head><body class="page"><p class="banner bad">${escapeHtml(message)}</p><p><a href="/">Back</a></p></body></html>`,
+      code,
+    );
   }
-  if (status === 401) {
-    return c.redirect("/login");
-  }
-  return c.html(
-    `<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/styles.css"><title>Error</title></head><body class="page"><p class="banner bad">${escapeHtml(message)}</p><p><a href="/">Back</a></p></body></html>`,
-    code,
-  );
+  applySecurityHeaders(res.headers, c.req.url, c.req.path);
+  return res;
 }
 
 export async function signOut(c: { env: Env; req: { url: string }; get: (k: "sessionId") => string | null }) {

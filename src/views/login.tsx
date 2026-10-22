@@ -51,9 +51,9 @@ export function LoginPage(props: {
   );
 }
 
-export function MagicConfirmPage(props: { token: string; csrf: string }) {
+export function MagicConfirmPage(props: { csrf: string }) {
   return (
-    <Layout title="Confirm sign-in" actor={null} path="/auth/magic">
+    <Layout title="Confirm sign-in" actor={null} path="/auth/magic" referrerPolicy="no-referrer">
       <section class="panel narrow">
         <p class="kicker">Parvitium · Tooele County</p>
         <h1>Confirm sign-in</h1>
@@ -62,7 +62,6 @@ export function MagicConfirmPage(props: { token: string; csrf: string }) {
           once and will not be consumed until you submit this form.
         </p>
         <form class="stack" method="post" action="/auth/magic/consume">
-          <input type="hidden" name="token" value={props.token} />
           <Csrf token={props.csrf} />
           <button class="btn" type="submit">
             Sign in

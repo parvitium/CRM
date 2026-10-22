@@ -60,6 +60,7 @@ adminRoutes.get("/", async (c) => {
     AdminHome({
       actor,
       path: "/admin",
+      csrf: c.get("csrfToken") ?? "",
       notice: noticeFromQuery(c).notice,
       counts,
       flags: flags.results,
@@ -276,13 +277,25 @@ adminRoutes.post("/tickets/:id/qa", async (c) => {
 adminRoutes.get("/history", async (c) => {
   const actor = requireAdmin(c.get("actor"));
   const rows = await listDevHistory(c.env.DB);
-  return c.html(HistoryPage({ actor, path: "/admin/history", rows: rows.results }));
+  return c.html(
+    HistoryPage({
+      actor,
+      path: "/admin/history",
+      csrf: c.get("csrfToken") ?? "",
+      rows: rows.results,
+    }),
+  );
 });
 
 adminRoutes.get("/templates", async (c) => {
   const actor = requireAdmin(c.get("actor"));
   const templates = await listTemplates(c.env.DB);
   return c.html(
-    TemplatesPage({ actor, path: "/admin/templates", templates: templates.results }),
+    TemplatesPage({
+      actor,
+      path: "/admin/templates",
+      csrf: c.get("csrfToken") ?? "",
+      templates: templates.results,
+    }),
   );
 });

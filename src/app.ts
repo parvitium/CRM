@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { createAdapters } from "./adapters";
 import type { AppEnv } from "./app-env";
 import { csrfMiddleware, handleError, sessionMiddleware } from "./middleware/auth";
+import { securityHeaders } from "./middleware/security";
 import { adminRoutes } from "./routes/admin";
 import { apiRoutes } from "./routes/api";
 import { authRoutes } from "./routes/auth";
@@ -10,6 +11,7 @@ import { portalRoutes } from "./routes/portal";
 export function createApp() {
   const app = new Hono<AppEnv>();
   app.onError(handleError);
+  app.use("*", securityHeaders);
   app.use("*", async (c, next) => {
     c.set("adapters", createAdapters(c.env));
     await next();

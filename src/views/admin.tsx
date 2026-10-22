@@ -7,12 +7,13 @@ import { money, productLineLabel, when, whenTime } from "./format";
 export function AdminHome(props: {
   actor: Actor;
   path: string;
+  csrf: string;
   notice?: string;
   counts: { customers: number; openFlags: number; openTickets: number; pastDue: number };
   flags: Record<string, unknown>[];
 }) {
   return (
-    <Layout title="Dashboard" actor={props.actor} path={props.path} notice={props.notice}>
+    <Layout title="Dashboard" actor={props.actor} path={props.path} csrf={props.csrf} notice={props.notice}>
       <p class="kicker">Adam’s desk</p>
       <h1>Dashboard</h1>
       <div class="stats">
@@ -60,7 +61,7 @@ export function CustomerListPage(props: {
   packages: { id: string; name: string; product_line: string }[];
 }) {
   return (
-    <Layout title="Customers" actor={props.actor} path={props.path} notice={props.notice}>
+    <Layout title="Customers" actor={props.actor} path={props.path} csrf={props.csrf} notice={props.notice}>
       <p class="kicker">Accounts</p>
       <h1>Customers</h1>
       <div class="split">
@@ -157,7 +158,7 @@ export function CustomerDetailPage(props: {
 }) {
   const c = props.customer;
   return (
-    <Layout title={String(c.business_name)} actor={props.actor} path={props.path}>
+    <Layout title={String(c.business_name)} actor={props.actor} path={props.path} csrf={props.csrf}>
       <p class="kicker">
         <a href="/admin/customers">Customers</a>
       </p>
@@ -487,7 +488,7 @@ export function FlagsPage(props: {
   flags: Record<string, unknown>[];
 }) {
   return (
-    <Layout title="Flags" actor={props.actor} path={props.path}>
+    <Layout title="Flags" actor={props.actor} path={props.path} csrf={props.csrf}>
       <p class="kicker">Inbox</p>
       <h1>Messages & flags</h1>
       {props.flags.length === 0 ? (
@@ -528,7 +529,7 @@ export function TicketBoardPage(props: {
   customers: { id: string; business_name: string }[];
 }) {
   return (
-    <Layout title="Tickets" actor={props.actor} path={props.path} notice={props.notice}>
+    <Layout title="Tickets" actor={props.actor} path={props.path} csrf={props.csrf} notice={props.notice}>
       <p class="kicker">QA / Dev</p>
       <h1>Ticket board</h1>
       <div class="board">
@@ -622,7 +623,7 @@ export function TicketDetailPage(props: {
 }) {
   const t = props.ticket;
   return (
-    <Layout title={t.title} actor={props.actor} path={props.path} error={props.error}>
+    <Layout title={t.title} actor={props.actor} path={props.path} csrf={props.csrf} error={props.error}>
       <p class="kicker">
         <a href="/admin/tickets">Tickets</a>
       </p>
@@ -716,10 +717,11 @@ export function TicketDetailPage(props: {
 export function HistoryPage(props: {
   actor: Actor;
   path: string;
+  csrf: string;
   rows: Record<string, unknown>[];
 }) {
   return (
-    <Layout title="Dev history" actor={props.actor} path={props.path}>
+    <Layout title="Dev history" actor={props.actor} path={props.path} csrf={props.csrf}>
       <p class="kicker">Closed dev work</p>
       <h1>History of work done</h1>
       {props.rows.length === 0 ? (
@@ -755,10 +757,11 @@ export function HistoryPage(props: {
 export function TemplatesPage(props: {
   actor: Actor;
   path: string;
+  csrf: string;
   templates: Record<string, unknown>[];
 }) {
   return (
-    <Layout title="Templates" actor={props.actor} path={props.path}>
+    <Layout title="Templates" actor={props.actor} path={props.path} csrf={props.csrf}>
       <p class="kicker">Site catalog</p>
       <h1>Website templates</h1>
       <ul class="flag-cards">

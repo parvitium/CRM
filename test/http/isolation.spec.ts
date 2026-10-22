@@ -1,4 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import { env } from "cloudflare:workers";
+import { listPortalSocialAccounts, listSocialAccounts, PORTAL_SOCIAL_COLUMNS } from "../../src/db/queries";
 import { CUSTOMER_IDS, EMAILS } from "../../src/ids";
 import { json, login, seedSql, workerFetch } from "../helpers";
 
@@ -45,6 +47,21 @@ describe("customer isolation", () => {
     expect(html).toContain("partner_granted");
     expect(html).not.toContain("op://");
     expect(html).not.toContain("password");
+  });
+
+  it("never selects secrets_manager_ref in the portal social query", async () => {
+    expect(PORTAL_SOCIAL_COLUMNS).not.toContain("secrets_manager_ref");
+    const portal = await listPortalSocialAccounts(env.DB, CUSTOMER_IDS.summit);
+    const admin = await listSocialAccounts(env.DB, CUSTOMER_IDS.summit);
+    expect(portal.results.length).toBeGreaterThan(0);
+    expect(admin.results.some((row) => String(row.secrets_manager_ref ?? "").startsWith("op://"))).toBe(
+      true,
+    );
+    for (const row of portal.results) {
+      expect(row).not.toHaveProperty("secrets_manager_ref");
+    }
+    expect(JSON.stringify(portal.results)).not.toContain("op://");
+    expect(JSON.stringify(portal.results)).not.toContain("secrets_manager_ref");
   });
 
   it("keeps admin HTML and APIs off-limits to customers", async () => {

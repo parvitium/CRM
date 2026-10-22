@@ -34,6 +34,8 @@ export function Layout(props: {
   title: string;
   actor: Actor | null;
   path: string;
+  csrf?: string;
+  referrerPolicy?: "no-referrer";
   notice?: string | null;
   error?: string | null;
   children: Child;
@@ -45,8 +47,15 @@ export function Layout(props: {
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        {props.referrerPolicy === "no-referrer" ? (
+          <meta name="referrer" content="no-referrer" />
+        ) : null}
         <title>{props.title} · Parvitium CRM</title>
-        <link rel="stylesheet" href="/styles.css" />
+        <link
+          rel="stylesheet"
+          href="/styles.css"
+          {...(props.referrerPolicy === "no-referrer" ? { referrerpolicy: "no-referrer" } : {})}
+        />
       </head>
       <body>
         <header class="top">
@@ -74,6 +83,7 @@ export function Layout(props: {
                   <small>{props.actor.role}</small>
                 </span>
                 <form method="post" action="/logout">
+                  <Csrf token={props.csrf ?? ""} />
                   <button class="text-btn" type="submit">
                     Sign out
                   </button>

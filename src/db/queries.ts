@@ -204,6 +204,30 @@ export async function listSocialAccounts(db: D1Database, customerId: string) {
     }>();
 }
 
+/** Portal-only: never select vault pointers. Admin uses listSocialAccounts. */
+export const PORTAL_SOCIAL_COLUMNS =
+  "id, customer_id, platform, access_status, owner_email, last_verified_at, notes";
+
+export async function listPortalSocialAccounts(db: D1Database, customerId: string) {
+  return db
+    .prepare(
+      `SELECT ${PORTAL_SOCIAL_COLUMNS}
+       FROM social_accounts
+       WHERE customer_id = ?
+       ORDER BY platform`,
+    )
+    .bind(customerId)
+    .all<{
+      id: string;
+      customer_id: string;
+      platform: string;
+      access_status: string;
+      owner_email: string | null;
+      last_verified_at: string | null;
+      notes: string | null;
+    }>();
+}
+
 export async function upsertSocialAccount(
   db: D1Database,
   input: {

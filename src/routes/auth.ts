@@ -1,12 +1,15 @@
 import { Hono } from "hono";
 import {
   clearMagicCsrfCookie,
+  clearMagicTokenCookie,
   consumeMagicLink,
   createMagicCsrf,
   issueMagicLink,
   magicCsrfCookie,
+  magicTokenCookie,
   peekMagicLink,
   readMagicCsrf,
+  readMagicToken,
 } from "../auth/magic-link";
 import { timingSafeEqual } from "../auth/crypto";
 import { createSession, sessionCookie } from "../auth/session";
@@ -49,31 +52,45 @@ authRoutes.post("/auth/magic", async (c) => {
 });
 
 authRoutes.get("/auth/magic", async (c) => {
-  const token = c.req.query("token") ?? "";
-  if ((await peekMagicLink(c.env.DB, token)) !== "ok") {
+  const queryToken = c.req.query("token") ?? "";
+  if (queryToken) {
+    if ((await peekMagicLink(c.env.DB, queryToken)) !== "ok") {
+      return c.redirect("/login?error=That+link+is+invalid+or+expired");
+    }
+    const csrf = createMagicCsrf();
+    c.header("Set-Cookie", magicTokenCookie(queryToken, c.req.url));
+    c.header("Set-Cookie", magicCsrfCookie(csrf, c.req.url), { append: true });
+    return c.redirect("/auth/magic", 303);
+  }
+
+  const cookieHeader = c.req.header("Cookie") ?? null;
+  const token = readMagicToken(cookieHeader) ?? "";
+  const csrf = readMagicCsrf(cookieHeader);
+  if (!csrf || (await peekMagicLink(c.env.DB, token)) !== "ok") {
     return c.redirect("/login?error=That+link+is+invalid+or+expired");
   }
-  const csrf = createMagicCsrf();
-  c.header("Set-Cookie", magicCsrfCookie(csrf, c.req.url));
-  return c.html(MagicConfirmPage({ token, csrf }));
+  return c.html(MagicConfirmPage({ csrf }));
 });
 
 authRoutes.post("/auth/magic/consume", async (c) => {
   const form = await c.req.parseBody();
-  const token = typeof form.token === "string" ? form.token : "";
+  const cookieHeader = c.req.header("Cookie") ?? null;
+  const token = readMagicToken(cookieHeader) ?? "";
   const csrf = typeof form.csrf === "string" ? form.csrf : "";
-  const cookieCsrf = readMagicCsrf(c.req.header("Cookie") ?? null);
+  const cookieCsrf = readMagicCsrf(cookieHeader);
   if (!cookieCsrf || !timingSafeEqual(csrf, cookieCsrf)) {
     throw new HttpError(403, "Invalid CSRF token");
   }
   const userId = await consumeMagicLink(c.env.DB, token);
   if (!userId) {
     c.header("Set-Cookie", clearMagicCsrfCookie(c.req.url));
+    c.header("Set-Cookie", clearMagicTokenCookie(c.req.url), { append: true });
     return c.redirect("/login?error=That+link+is+invalid+or+expired");
   }
   const created = await createSession(c.env.DB, userId);
   c.header("Set-Cookie", sessionCookie(created.rawToken, c.req.url));
   c.header("Set-Cookie", clearMagicCsrfCookie(c.req.url), { append: true });
+  c.header("Set-Cookie", clearMagicTokenCookie(c.req.url), { append: true });
   const user = await c.env.DB.prepare("SELECT role FROM users WHERE id = ?")
     .bind(userId)
     .first<{ role: string }>();
@@ -95,7 +112,11 @@ authRoutes.post("/auth/dev-login", async (c) => {
   return c.redirect(user.role === "admin" ? "/admin" : "/portal");
 });
 
-authRoutes.post("/logout", async (c) => {
+authRoutes.all("/logout", async (c) => {
+  if (c.req.method !== "POST") {
+    c.header("Allow", "POST");
+    return c.text("Method Not Allowed", 405);
+  }
   c.header("Set-Cookie", await signOut(c));
   return c.redirect("/login");
 });

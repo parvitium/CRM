@@ -76,11 +76,12 @@ CI runs the same three commands. There is **no deploy job**.
 
 - **Roles:** `admin` (Adam) and `customer` (one portal user per customer).
 - **Session:** random token, SHA-256 stored in `sessions`, `HttpOnly` + `SameSite=Lax` cookie (`pv_session`). Raw tokens are never stored.
-- **Magic link:** 15-minute, single-use, hashed token. GET shows a confirm page; POST `/auth/magic/consume` spends it (CSRF + atomic `UPDATE … WHERE used_at IS NULL`). Same response whether or not the email exists. The raw token is never logged.
+- **Magic link:** 15-minute, single-use, hashed token. GET `?token=` stores the token in an HttpOnly cookie and 303s to `/auth/magic` (no token in the URL, `Referrer-Policy: no-referrer`). POST `/auth/magic/consume` spends it (CSRF + atomic `UPDATE … WHERE used_at IS NULL`). Issuance takes a minimum time and returns the same response whether or not the email exists. The raw token is never logged.
 - **Cloudflare Access:** only when `AUTH_MODE=access` and `Cf-Access-Jwt-Assertion` verifies against the team JWKS (`CF_ACCESS_TEAM_DOMAIN` + `CF_ACCESS_AUD`). The `Cf-Access-Authenticated-User-Email` header is ignored otherwise. `/health` never mints a session.
 - **Dev login:** only when `ALLOW_DEV_LOGIN=true` (`.dev.vars` / CI). Production `wrangler.jsonc` sets this to empty.
-- **CSRF:** required on authenticated POSTs (`csrf` form field or `X-CSRF-Token`).
-- **Portal isolation:** portal queries use `actor.customerId` from the session. A customer id in the URL is never trusted for authorization.
+- **CSRF:** required on authenticated POSTs and logout (`csrf` form field or `X-CSRF-Token`). Comparison is constant-time with no length short-circuit. Logout is POST only.
+- **Security headers:** every response gets CSP (`frame-ancestors 'none'`), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, and HSTS on HTTPS.
+- **Portal isolation:** portal queries use `actor.customerId` from the session. A customer id in the URL is never trusted for authorization. Portal social queries never select `secrets_manager_ref`.
 
 ## Data model (D1)
 

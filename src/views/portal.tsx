@@ -7,6 +7,7 @@ function PortalChrome(props: {
   title: string;
   actor: Actor;
   path: string;
+  csrf: string;
   notice?: string;
   error?: string;
   children: Child;
@@ -16,6 +17,7 @@ function PortalChrome(props: {
       title={props.title}
       actor={props.actor}
       path={props.path}
+      csrf={props.csrf}
       notice={props.notice}
       error={props.error}
     >
@@ -27,6 +29,7 @@ function PortalChrome(props: {
 export function PortalHome(props: {
   actor: Actor;
   path: string;
+  csrf: string;
   customer: Record<string, unknown>;
   subscription: Record<string, unknown> | null;
   website: Record<string, unknown> | null;
@@ -35,7 +38,7 @@ export function PortalHome(props: {
   openReviews: number;
 }) {
   return (
-    <PortalChrome title="Your portal" actor={props.actor} path={props.path}>
+    <PortalChrome title="Your portal" actor={props.actor} path={props.path} csrf={props.csrf}>
       <p class="kicker">{String(props.customer.business_name)}</p>
       <h1>Welcome, {props.actor.displayName}</h1>
       <p class="lede">Read-mostly view of your Parvitium / TooeleTrades account.</p>
@@ -69,11 +72,12 @@ export function PortalHome(props: {
 export function PortalPackage(props: {
   actor: Actor;
   path: string;
+  csrf: string;
   subscription: Record<string, unknown> | null;
   payments: Record<string, unknown>[];
 }) {
   return (
-    <PortalChrome title="Package" actor={props.actor} path={props.path}>
+    <PortalChrome title="Package" actor={props.actor} path={props.path} csrf={props.csrf}>
       <h1>Package & payments</h1>
       {props.subscription ? (
         <section class="panel">
@@ -130,10 +134,11 @@ export function PortalPackage(props: {
 export function PortalSite(props: {
   actor: Actor;
   path: string;
+  csrf: string;
   websites: Record<string, unknown>[];
 }) {
   return (
-    <PortalChrome title="Website" actor={props.actor} path={props.path}>
+    <PortalChrome title="Website" actor={props.actor} path={props.path} csrf={props.csrf}>
       <h1>Website</h1>
       {props.websites.length === 0 ? (
         <Empty>No website recorded yet.</Empty>
@@ -161,10 +166,11 @@ export function PortalSite(props: {
 export function PortalSocial(props: {
   actor: Actor;
   path: string;
+  csrf: string;
   social: Record<string, unknown>[];
 }) {
   return (
-    <PortalChrome title="Social" actor={props.actor} path={props.path}>
+    <PortalChrome title="Social" actor={props.actor} path={props.path} csrf={props.csrf}>
       <h1>Social access</h1>
       <p class="hint">
         This is access status only — partner or delegated access, owner email, last verified.
@@ -201,10 +207,11 @@ export function PortalSocial(props: {
 export function PortalGbp(props: {
   actor: Actor;
   path: string;
+  csrf: string;
   gbp: Record<string, unknown> | null;
 }) {
   return (
-    <PortalChrome title="Google" actor={props.actor} path={props.path}>
+    <PortalChrome title="Google" actor={props.actor} path={props.path} csrf={props.csrf}>
       <h1>Google Business Profile</h1>
       {props.gbp ? (
         <section class="panel">
@@ -225,10 +232,11 @@ export function PortalGbp(props: {
 export function PortalSeo(props: {
   actor: Actor;
   path: string;
+  csrf: string;
   seo: Record<string, unknown>[];
 }) {
   return (
-    <PortalChrome title="SEO" actor={props.actor} path={props.path}>
+    <PortalChrome title="SEO" actor={props.actor} path={props.path} csrf={props.csrf}>
       <h1>Page rank & AI citation</h1>
       {props.seo.length === 0 ? (
         <Empty>No snapshots yet.</Empty>
@@ -261,11 +269,12 @@ export function PortalSeo(props: {
 export function PortalCalls(props: {
   actor: Actor;
   path: string;
+  csrf: string;
   calls: Record<string, unknown>[];
   stats: { count: number; total_seconds: number; avg_seconds: number } | null;
 }) {
   return (
-    <PortalChrome title="Calls" actor={props.actor} path={props.path}>
+    <PortalChrome title="Calls" actor={props.actor} path={props.path} csrf={props.csrf}>
       <h1>AI receptionist</h1>
       <p class="lede">
         {props.stats
@@ -303,10 +312,11 @@ export function PortalCalls(props: {
 export function PortalReviews(props: {
   actor: Actor;
   path: string;
+  csrf: string;
   reviews: Record<string, unknown>[];
 }) {
   return (
-    <PortalChrome title="Reviews" actor={props.actor} path={props.path}>
+    <PortalChrome title="Reviews" actor={props.actor} path={props.path} csrf={props.csrf}>
       <h1>AI review manager</h1>
       {props.reviews.length === 0 ? (
         <Empty>No reviews imported.</Empty>
@@ -336,7 +346,7 @@ export function PortalMessages(props: {
   messages: Record<string, unknown>[];
 }) {
   return (
-    <PortalChrome title="Messages" actor={props.actor} path={props.path} notice={props.notice}>
+    <PortalChrome title="Messages" actor={props.actor} path={props.path} csrf={props.csrf} notice={props.notice}>
       <h1>Messages to Adam</h1>
       <form class="panel stack" method="post" action="/portal/messages">
         <Csrf token={props.csrf} />

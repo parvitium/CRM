@@ -15,7 +15,7 @@ import {
   listPayments,
   listReviews,
   listSeo,
-  listSocialAccounts,
+  listPortalSocialAccounts,
   listWebsites,
 } from "../db/queries";
 import {
@@ -43,11 +43,11 @@ async function scopedCustomer(c: Context<AppEnv>) {
   if (!customer) {
     throw new HttpError(404, "Customer profile missing");
   }
-  return { actor, customer };
+  return { actor, customer, csrf: c.get("csrfToken") ?? "" };
 }
 
 portalRoutes.get("/", async (c) => {
-  const { actor, customer } = await scopedCustomer(c);
+  const { actor, customer, csrf } = await scopedCustomer(c);
   const [subscription, websites, gbp, stats, reviews] = await Promise.all([
     getSubscriptionForCustomer(c.env.DB, customer.id),
     listWebsites(c.env.DB, customer.id),
@@ -62,6 +62,7 @@ portalRoutes.get("/", async (c) => {
     PortalHome({
       actor,
       path: "/portal",
+      csrf,
       customer,
       subscription,
       website: websites.results[0] ?? null,
@@ -73,7 +74,7 @@ portalRoutes.get("/", async (c) => {
 });
 
 portalRoutes.get("/package", async (c) => {
-  const { actor, customer } = await scopedCustomer(c);
+  const { actor, customer, csrf } = await scopedCustomer(c);
   const [subscription, payments] = await Promise.all([
     getSubscriptionForCustomer(c.env.DB, customer.id),
     listPayments(c.env.DB, customer.id),
@@ -82,6 +83,7 @@ portalRoutes.get("/package", async (c) => {
     PortalPackage({
       actor,
       path: "/portal/package",
+      csrf,
       subscription,
       payments: payments.results,
     }),
@@ -89,54 +91,63 @@ portalRoutes.get("/package", async (c) => {
 });
 
 portalRoutes.get("/site", async (c) => {
-  const { actor, customer } = await scopedCustomer(c);
+  const { actor, customer, csrf } = await scopedCustomer(c);
   const websites = await listWebsites(c.env.DB, customer.id);
-  return c.html(PortalSite({ actor, path: "/portal/site", websites: websites.results }));
+  return c.html(PortalSite({ actor, path: "/portal/site", csrf, websites: websites.results }));
 });
 
 portalRoutes.get("/social", async (c) => {
-  const { actor, customer } = await scopedCustomer(c);
-  const social = await listSocialAccounts(c.env.DB, customer.id);
-  return c.html(PortalSocial({ actor, path: "/portal/social", social: social.results }));
+  const { actor, customer, csrf } = await scopedCustomer(c);
+  const social = await listPortalSocialAccounts(c.env.DB, customer.id);
+  return c.html(
+    PortalSocial({
+      actor,
+      path: "/portal/social",
+      csrf,
+      social: social.results,
+    }),
+  );
 });
 
 portalRoutes.get("/gbp", async (c) => {
-  const { actor, customer } = await scopedCustomer(c);
+  const { actor, customer, csrf } = await scopedCustomer(c);
   const gbp = await getGbp(c.env.DB, customer.id);
-  return c.html(PortalGbp({ actor, path: "/portal/gbp", gbp }));
+  return c.html(PortalGbp({ actor, path: "/portal/gbp", csrf, gbp }));
 });
 
 portalRoutes.get("/seo", async (c) => {
-  const { actor, customer } = await scopedCustomer(c);
+  const { actor, customer, csrf } = await scopedCustomer(c);
   const seo = await listSeo(c.env.DB, customer.id);
-  return c.html(PortalSeo({ actor, path: "/portal/seo", seo: seo.results }));
+  return c.html(PortalSeo({ actor, path: "/portal/seo", csrf, seo: seo.results }));
 });
 
 portalRoutes.get("/calls", async (c) => {
-  const { actor, customer } = await scopedCustomer(c);
+  const { actor, customer, csrf } = await scopedCustomer(c);
   const [calls, stats] = await Promise.all([
     listCalls(c.env.DB, customer.id),
     callStats(c.env.DB, customer.id),
   ]);
   return c.html(
-    PortalCalls({ actor, path: "/portal/calls", calls: calls.results, stats }),
+    PortalCalls({ actor, path: "/portal/calls", csrf, calls: calls.results, stats }),
   );
 });
 
 portalRoutes.get("/reviews", async (c) => {
-  const { actor, customer } = await scopedCustomer(c);
+  const { actor, customer, csrf } = await scopedCustomer(c);
   const reviews = await listReviews(c.env.DB, customer.id);
-  return c.html(PortalReviews({ actor, path: "/portal/reviews", reviews: reviews.results }));
+  return c.html(
+    PortalReviews({ actor, path: "/portal/reviews", csrf, reviews: reviews.results }),
+  );
 });
 
 portalRoutes.get("/messages", async (c) => {
-  const { actor, customer } = await scopedCustomer(c);
+  const { actor, customer, csrf } = await scopedCustomer(c);
   const messages = await listMessages(c.env.DB, customer.id);
   return c.html(
     PortalMessages({
       actor,
       path: "/portal/messages",
-      csrf: c.get("csrfToken") ?? "",
+      csrf,
       notice: noticeFromQuery(c).notice,
       messages: messages.results,
     }),
