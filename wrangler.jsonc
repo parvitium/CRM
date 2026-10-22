@@ -40,6 +40,11 @@
     "CF_ACCESS_TEAM_DOMAIN": "",
     "CF_ACCESS_AUD": "",
   },
+  "triggers": {
+    // Global sweep of expired rate_limit_events. Request path also deletes a
+    // small batch on ~1/16 of consumeRateLimit calls.
+    "crons": ["*/15 * * * *"],
+  },
   // R2 for call recordings is planned, not bound yet:
   // "r2_buckets": [{ "binding": "RECORDINGS", "bucket_name": "parvitium-crm-recordings" }]
 }

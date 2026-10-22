@@ -169,6 +169,101 @@ describe("auth", () => {
     expect(after?.n ?? 0).toBe(before?.n ?? 0);
   });
 
+  it("does not grow rate_limit_events on denied magic-link POSTs", async () => {
+    const email = `deny-rows.${crypto.randomUUID()}@example.test`;
+    const ip = `198.51.100.${Math.floor(Math.random() * 200) + 1}`;
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, display_name, role, customer_id, created_at)
+       VALUES (?, ?, 'Rate Limit', 'admin', NULL, ?)`,
+    )
+      .bind(crypto.randomUUID(), email, new Date().toISOString())
+      .run();
+    const emailBucket = await magicEmailBucket(email);
+    const ipBucket = await magicIpBucket(ip);
+    await seedRateLimitEvents(env.DB, emailBucket, MAGIC_EMAIL_LIMIT);
+    await seedRateLimitEvents(env.DB, ipBucket, MAGIC_IP_LIMIT);
+    const countBucket = async (bucket: string) => {
+      const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM rate_limit_events WHERE bucket = ?")
+        .bind(bucket)
+        .first<{ n: number }>();
+      return Number(row?.n ?? 0);
+    };
+    expect(await countBucket(emailBucket)).toBe(MAGIC_EMAIL_LIMIT);
+    expect(await countBucket(ipBucket)).toBe(MAGIC_IP_LIMIT);
+
+    for (let i = 0; i < 10; i += 1) {
+      const started = Date.now();
+      const denied = await workerFetch("https://crm.test/auth/magic", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "CF-Connecting-IP": ip,
+        },
+        body: new URLSearchParams({ email }).toString(),
+        redirect: "manual",
+      });
+      expect(denied.status).toBe(302);
+      expect(denied.headers.get("Location")).toMatch(/notice=If\+that\+email\+has\+an\+account/);
+      expect(Date.now() - started).toBeGreaterThanOrEqual(MAGIC_ISSUE_MIN_MS - 10);
+    }
+
+    expect(await countBucket(emailBucket)).toBe(MAGIC_EMAIL_LIMIT);
+    expect(await countBucket(ipBucket)).toBe(MAGIC_IP_LIMIT);
+    const mailed = await env.DB.prepare("SELECT COUNT(*) AS n FROM outbound_emails WHERE to_email = ?")
+      .bind(email)
+      .first<{ n: number }>();
+    expect(mailed?.n ?? 0).toBe(0);
+  });
+
+  it("ignores X-Forwarded-For on HTTPS and uses it only on local HTTP", async () => {
+    const xff = `203.0.113.${Math.floor(Math.random() * 200) + 1}`;
+    await seedRateLimitEvents(env.DB, await magicIpBucket(xff), MAGIC_IP_LIMIT);
+    const httpsEmail = `xff-https.${crypto.randomUUID()}@example.test`;
+    const httpEmail = EMAILS.desert;
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, display_name, role, customer_id, created_at)
+       VALUES (?, ?, 'XFF HTTPS', 'admin', NULL, ?)`,
+    )
+      .bind(crypto.randomUUID(), httpsEmail, new Date().toISOString())
+      .run();
+    const httpsBefore = await env.DB.prepare("SELECT COUNT(*) AS n FROM outbound_emails WHERE to_email = ?")
+      .bind(httpsEmail)
+      .first<{ n: number }>();
+    const httpBefore = await env.DB.prepare("SELECT COUNT(*) AS n FROM outbound_emails WHERE to_email = ?")
+      .bind(httpEmail)
+      .first<{ n: number }>();
+
+    const httpsRes = await workerFetch("https://crm.test/auth/magic", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-Forwarded-For": xff,
+      },
+      body: new URLSearchParams({ email: httpsEmail }).toString(),
+      redirect: "manual",
+    });
+    expect(httpsRes.status).toBe(302);
+    const httpsAfter = await env.DB.prepare("SELECT COUNT(*) AS n FROM outbound_emails WHERE to_email = ?")
+      .bind(httpsEmail)
+      .first<{ n: number }>();
+    expect(httpsAfter?.n ?? 0).toBe((httpsBefore?.n ?? 0) + 1);
+
+    const httpRes = await workerFetch("http://127.0.0.1:8787/auth/magic", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-Forwarded-For": xff,
+      },
+      body: new URLSearchParams({ email: httpEmail }).toString(),
+      redirect: "manual",
+    });
+    expect(httpRes.status).toBe(302);
+    const httpAfter = await env.DB.prepare("SELECT COUNT(*) AS n FROM outbound_emails WHERE to_email = ?")
+      .bind(httpEmail)
+      .first<{ n: number }>();
+    expect(httpAfter?.n ?? 0).toBe(httpBefore?.n ?? 0);
+  });
+
   it("rate-limits magic-link issuance per IP without revealing accounts", async () => {
     const ip = `203.0.113.${Math.floor(Math.random() * 200) + 1}`;
     await seedRateLimitEvents(env.DB, await magicIpBucket(ip), MAGIC_IP_LIMIT);
