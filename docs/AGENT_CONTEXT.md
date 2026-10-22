@@ -25,8 +25,8 @@ Handwritten spec (transcribed) lives in the original issue. Scope is the foundat
 - Roles: `admin` | `customer`. Customer users must have `customer_id`. Admins must not.
 - Portal data loads with `requirePortalCustomer(actor)` and `actor.customerId`. Never authorize with a customer id from the URL.
 - Sessions: store `sha256(token)` only. Cookie `pv_session`, HttpOnly, SameSite=Lax, Secure on HTTPS.
-- Magic links: hashed, 15 minutes, single use. GET `?token=` 303s to a token-free confirm URL (`no-referrer`); POST consume with CSRF. Same response and a minimum issuance time for unknown emails. Never log the raw token.
-- Cloudflare Access: honor only when `AUTH_MODE=access` and `Cf-Access-Jwt-Assertion` verifies against the team JWKS (`CF_ACCESS_TEAM_DOMAIN` + `CF_ACCESS_AUD`). Ignore `Cf-Access-Authenticated-User-Email` otherwise. `/health` never mints a session.
+- Magic links: hashed, 15 minutes, single use. GET `?token=` 303s to a token-free confirm URL (`no-referrer`); POST consume with CSRF. Confirm page names the account email. Same response and a minimum issuance time for unknown emails. Never log the raw token. **Never log `/auth/magic` query strings in production** (Cloudflare request logs, access logs, reverse proxies) — the first email click still carries `?token=`.
+- Cloudflare Access: honor only when `AUTH_MODE=access` and `Cf-Access-Jwt-Assertion` verifies against the team JWKS (`CF_ACCESS_TEAM_DOMAIN` + `CF_ACCESS_AUD`). Ignore `Cf-Access-Authenticated-User-Email` otherwise. `/health` and `/health/` never mint a session.
 - `ALLOW_DEV_LOGIN=true` is local/test only. Production vars leave it empty.
 - CSRF on authenticated POSTs, logout (POST only), and magic-link consume. Compare constant-time with no length short-circuit.
 - Security headers on every response: CSP (including `frame-ancestors`), `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, HSTS on HTTPS.

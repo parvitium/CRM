@@ -51,15 +51,15 @@ export function LoginPage(props: {
   );
 }
 
-export function MagicConfirmPage(props: { csrf: string }) {
+export function MagicConfirmPage(props: { csrf: string; email: string }) {
   return (
     <Layout title="Confirm sign-in" actor={null} path="/auth/magic" referrerPolicy="no-referrer">
       <section class="panel narrow">
         <p class="kicker">Parvitium · Tooele County</p>
         <h1>Confirm sign-in</h1>
         <p class="lede">
-          This link was emailed to you. Confirm below to finish signing in. The link works
-          once and will not be consumed until you submit this form.
+          This link will sign you in as <strong>{props.email}</strong>. Confirm only if you
+          requested this link. It works once and will not be consumed until you submit this form.
         </p>
         <form class="stack" method="post" action="/auth/magic/consume">
           <Csrf token={props.csrf} />

@@ -30,10 +30,21 @@ export function applySecurityHeaders(headers: Headers, requestUrl: string, path:
   }
 }
 
+/**
+ * Workers Assets (`env.ASSETS.fetch`) returns a Response whose headers are
+ * immutable. Recreate before mutating so CSP / nosniff / frame denial can be
+ * applied without `TypeError: Can't modify immutable headers.`
+ */
+export function mutableResponse(res: Response): Response {
+  return new Response(res.body, res);
+}
+
 export const securityHeaders = createMiddleware<AppEnv>(async (c, next) => {
   try {
     await next();
   } finally {
-    applySecurityHeaders(c.res.headers, c.req.url, c.req.path);
+    const res = mutableResponse(c.res);
+    applySecurityHeaders(res.headers, c.req.url, c.req.path);
+    c.res = res;
   }
 });

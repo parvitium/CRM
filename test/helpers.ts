@@ -72,7 +72,7 @@ export function workerFetch(input: string, init?: RequestInit): Promise<Response
 export function workerFetchWithEnv(
   input: string,
   init: RequestInit | undefined,
-  overrides: Record<string, string>,
+  overrides: Record<string, unknown>,
 ): Promise<Response> {
   const app = createApp();
   const patched = new Proxy(env, {
@@ -82,8 +82,37 @@ export function workerFetchWithEnv(
       }
       return Reflect.get(target, prop, receiver);
     },
-  });
+  }) as Env;
   return app.fetch(new Request(input, init), patched);
+}
+
+/** Simulate Workers Assets: readable body, headers that throw on mutate. */
+export function immutableAssetResponse(body: string, contentType: string): Response {
+  const res = new Response(body, {
+    status: 200,
+    headers: { "Content-Type": contentType },
+  });
+  const fail = () => {
+    throw new TypeError("Can't modify immutable headers.");
+  };
+  for (const method of ["set", "append", "delete"] as const) {
+    Object.defineProperty(res.headers, method, { configurable: true, value: fail });
+  }
+  return res;
+}
+
+export function mockAssetsFetcher(files: Record<string, { body: string; contentType: string }>): Fetcher {
+  return {
+    fetch(input: RequestInfo | URL) {
+      const url = input instanceof Request ? input.url : String(input);
+      const path = new URL(url, "https://assets.test").pathname;
+      const file = files[path];
+      if (!file) {
+        return Promise.resolve(new Response("Not found", { status: 404 }));
+      }
+      return Promise.resolve(immutableAssetResponse(file.body, file.contentType));
+    },
+  } as Fetcher;
 }
 
 export function hiddenInput(html: string, name: string): string | null {

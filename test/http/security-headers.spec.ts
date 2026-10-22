@@ -1,7 +1,14 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { CONTENT_SECURITY_POLICY, HSTS_VALUE } from "../../src/middleware/security";
 import { EMAILS } from "../../src/ids";
-import { login, seedSql, workerFetch } from "../helpers";
+import {
+  immutableAssetResponse,
+  login,
+  mockAssetsFetcher,
+  seedSql,
+  workerFetch,
+  workerFetchWithEnv,
+} from "../helpers";
 
 function expectCommonSecurityHeaders(res: Response, referrer = "strict-origin-when-cross-origin") {
   expect(res.headers.get("Content-Security-Policy")).toBe(CONTENT_SECURITY_POLICY);
@@ -62,5 +69,28 @@ describe("security headers", () => {
     expect(page.status).toBe(200);
     expectCommonSecurityHeaders(page);
     expect(page.headers.get("Strict-Transport-Security")).toBe(HSTS_VALUE);
+  });
+
+  it("serves /styles.css from ASSETS with immutable headers and still applies CSP", async () => {
+    const css = "body{color:#1b1a17}";
+    const raw = immutableAssetResponse(css, "text/css; charset=utf-8");
+    expect(() => raw.headers.set("X-Test", "1")).toThrow(/immutable headers/);
+
+    const assets = mockAssetsFetcher({
+      "/styles.css": { body: css, contentType: "text/css; charset=utf-8" },
+    });
+
+    const res = await workerFetchWithEnv("https://crm.test/styles.css", undefined, { ASSETS: assets });
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe(css);
+    expect(res.headers.get("Content-Type")).toMatch(/text\/css/);
+    expectCommonSecurityHeaders(res);
+    expect(res.headers.get("Content-Security-Policy")).toMatch(/style-src 'self'/);
+    expect(res.headers.get("Strict-Transport-Security")).toBe(HSTS_VALUE);
+
+    const http = await workerFetchWithEnv("http://crm.test/styles.css", undefined, { ASSETS: assets });
+    expect(http.status).toBe(200);
+    expectCommonSecurityHeaders(http);
+    expect(http.headers.get("Strict-Transport-Security")).toBeNull();
   });
 });

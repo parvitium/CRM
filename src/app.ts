@@ -1,8 +1,8 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { createAdapters } from "./adapters";
 import type { AppEnv } from "./app-env";
 import { csrfMiddleware, handleError, sessionMiddleware } from "./middleware/auth";
-import { securityHeaders } from "./middleware/security";
+import { mutableResponse, securityHeaders } from "./middleware/security";
 import { adminRoutes } from "./routes/admin";
 import { apiRoutes } from "./routes/api";
 import { authRoutes } from "./routes/auth";
@@ -19,7 +19,9 @@ export function createApp() {
   app.use("*", sessionMiddleware);
   app.use("*", csrfMiddleware);
 
-  app.get("/health", (c) => c.json({ ok: true, service: "parvitium-crm" }));
+  const health = (c: Context<AppEnv>) => c.json({ ok: true, service: "parvitium-crm" });
+  app.get("/health", health);
+  app.get("/health/", health);
 
   app.route("/", authRoutes);
   app.route("/admin", adminRoutes);
@@ -38,7 +40,7 @@ export function createApp() {
     if (c.env.ASSETS && !c.req.path.startsWith("/api/")) {
       const asset = await c.env.ASSETS.fetch(c.req.raw);
       if (asset.status !== 404) {
-        return asset;
+        return mutableResponse(asset);
       }
     }
     if (c.req.path.startsWith("/api/")) {

@@ -54,7 +54,7 @@ authRoutes.post("/auth/magic", async (c) => {
 authRoutes.get("/auth/magic", async (c) => {
   const queryToken = c.req.query("token") ?? "";
   if (queryToken) {
-    if ((await peekMagicLink(c.env.DB, queryToken)) !== "ok") {
+    if (!(await peekMagicLink(c.env.DB, queryToken)).ok) {
       return c.redirect("/login?error=That+link+is+invalid+or+expired");
     }
     const csrf = createMagicCsrf();
@@ -66,10 +66,11 @@ authRoutes.get("/auth/magic", async (c) => {
   const cookieHeader = c.req.header("Cookie") ?? null;
   const token = readMagicToken(cookieHeader) ?? "";
   const csrf = readMagicCsrf(cookieHeader);
-  if (!csrf || (await peekMagicLink(c.env.DB, token)) !== "ok") {
+  const peeked = await peekMagicLink(c.env.DB, token);
+  if (!csrf || !peeked.ok) {
     return c.redirect("/login?error=That+link+is+invalid+or+expired");
   }
-  return c.html(MagicConfirmPage({ csrf }));
+  return c.html(MagicConfirmPage({ csrf, email: peeked.email }));
 });
 
 authRoutes.post("/auth/magic/consume", async (c) => {

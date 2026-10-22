@@ -7,7 +7,7 @@ export const MAGIC_CSRF_COOKIE = "pv_magic_csrf";
 export const MAGIC_TOKEN_COOKIE = "pv_magic_token";
 const MAGIC_CSRF_MAX_AGE = 15 * 60;
 /** Floor so known and unknown emails spend the same time issuing a link. */
-export const MAGIC_ISSUE_MIN_MS = 50;
+export const MAGIC_ISSUE_MIN_MS = 250;
 
 export async function issueMagicLink(
   db: D1Database,
@@ -74,19 +74,19 @@ export async function padElapsed(startedMs: number, minMs: number): Promise<void
 export async function peekMagicLink(
   db: D1Database,
   rawToken: string,
-): Promise<"ok" | "invalid"> {
+): Promise<{ ok: true; email: string } | { ok: false }> {
   const tokenHash = await hashToken(rawToken);
   if (!tokenHash) {
-    return "invalid";
+    return { ok: false };
   }
   const row = await db
-    .prepare(`SELECT expires_at, used_at FROM magic_links WHERE token_hash = ?`)
+    .prepare(`SELECT email, expires_at, used_at FROM magic_links WHERE token_hash = ?`)
     .bind(tokenHash)
-    .first<{ expires_at: string; used_at: string | null }>();
+    .first<{ email: string; expires_at: string; used_at: string | null }>();
   if (!row || row.used_at || row.expires_at <= nowIso()) {
-    return "invalid";
+    return { ok: false };
   }
-  return "ok";
+  return { ok: true, email: row.email };
 }
 
 /**

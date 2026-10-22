@@ -15,9 +15,13 @@ import { applySecurityHeaders } from "./security";
 import type { Context } from "hono";
 import type { AppEnv } from "../app-env";
 
+export function isHealthPath(path: string): boolean {
+  return path === "/health" || path === "/health/";
+}
+
 export const sessionMiddleware = createMiddleware<AppEnv>(async (c, next) => {
   // Health is public and must never mint or bind a session, even if Access headers are present.
-  if (c.req.path === "/health") {
+  if (isHealthPath(c.req.path)) {
     c.set("actor", null);
     c.set("csrfToken", null);
     c.set("sessionId", null);

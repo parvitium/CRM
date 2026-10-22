@@ -76,8 +76,8 @@ CI runs the same three commands. There is **no deploy job**.
 
 - **Roles:** `admin` (Adam) and `customer` (one portal user per customer).
 - **Session:** random token, SHA-256 stored in `sessions`, `HttpOnly` + `SameSite=Lax` cookie (`pv_session`). Raw tokens are never stored.
-- **Magic link:** 15-minute, single-use, hashed token. GET `?token=` stores the token in an HttpOnly cookie and 303s to `/auth/magic` (no token in the URL, `Referrer-Policy: no-referrer`). POST `/auth/magic/consume` spends it (CSRF + atomic `UPDATE … WHERE used_at IS NULL`). Issuance takes a minimum time and returns the same response whether or not the email exists. The raw token is never logged.
-- **Cloudflare Access:** only when `AUTH_MODE=access` and `Cf-Access-Jwt-Assertion` verifies against the team JWKS (`CF_ACCESS_TEAM_DOMAIN` + `CF_ACCESS_AUD`). The `Cf-Access-Authenticated-User-Email` header is ignored otherwise. `/health` never mints a session.
+- **Magic link:** 15-minute, single-use, hashed token. GET `?token=` stores the token in an HttpOnly cookie and 303s to `/auth/magic` (no token in the URL, `Referrer-Policy: no-referrer`). The confirm page shows the account email. POST `/auth/magic/consume` spends it (CSRF + atomic `UPDATE … WHERE used_at IS NULL`). Issuance takes a minimum time and returns the same response whether or not the email exists. The raw token is never logged. **Do not log `/auth/magic` query strings in production** — the first email click still carries `?token=` in the URL (history, proxies, Cloudflare request logs).
+- **Cloudflare Access:** only when `AUTH_MODE=access` and `Cf-Access-Jwt-Assertion` verifies against the team JWKS (`CF_ACCESS_TEAM_DOMAIN` + `CF_ACCESS_AUD`). The `Cf-Access-Authenticated-User-Email` header is ignored otherwise. `/health` and `/health/` never mint a session.
 - **Dev login:** only when `ALLOW_DEV_LOGIN=true` (`.dev.vars` / CI). Production `wrangler.jsonc` sets this to empty.
 - **CSRF:** required on authenticated POSTs and logout (`csrf` form field or `X-CSRF-Token`). Comparison is constant-time with no length short-circuit. Logout is POST only.
 - **Security headers:** every response gets CSP (`frame-ancestors 'none'`), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, and HSTS on HTTPS.
@@ -130,5 +130,6 @@ Packages in seed (TooeleTrades prices are from Adam; several Parvitium prices ar
 
 - Never commit `.dev.vars`, Stripe keys, Access JWKS, or 1Password tokens.
 - Never add `password`, `token`, or OAuth columns to `social_accounts`.
+- Never log `/auth/magic` query strings in production (the first email click still has `?token=`).
 - Seed data is fictional (`*.example` / `*.test` emails, `435-555-01xx` phones).
 - `npm run dry-run` is the only packaging command in CI. There is no deploy script.

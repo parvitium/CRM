@@ -125,6 +125,8 @@ describe("auth", () => {
     expect(confirm.firstHeaders.get("Referrer-Policy")).toBe("no-referrer");
     expect(confirm.status).toBe(200);
     expect(confirm.html).toMatch(/Confirm sign-in/);
+    expect(confirm.html).toContain(EMAILS.lakeview);
+    expect(confirm.html).toMatch(/sign you in as/);
     expect(confirm.html).not.toContain(token);
     expect(confirm.html).not.toContain("name=\"token\"");
     expect(confirm.html).toMatch(/name="referrer" content="no-referrer"/);
