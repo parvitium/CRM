@@ -24,8 +24,8 @@ Handwritten spec (transcribed) lives in the original issue. Scope is the foundat
 
 - Roles: `admin` | `customer`. Customer users must have `customer_id`. Admins must not.
 - Portal data loads with `requirePortalCustomer(actor)` and `actor.customerId`. Never authorize with a customer id from the URL.
-- Sessions: store `sha256(token)` only. Cookie `pv_session`, HttpOnly, SameSite=Lax, Secure on HTTPS.
-- Magic links: hashed, 15 minutes, single use. GET `?token=` 303s to a token-free confirm URL (`no-referrer`); POST consume with CSRF. Confirm page names the account email. Same response and a minimum issuance time for unknown emails. Never log the raw token. **Never log `/auth/magic` query strings in production** (Cloudflare request logs, access logs, reverse proxies) — the first email click still carries `?token=`.
+- Sessions: store `sha256(token)` only. HTTPS cookie is `__Host-pv_session` (Secure, Path=/, no Domain, HttpOnly, SameSite=Lax). HTTP `wrangler dev` fallback is `pv_session` without Secure (`__Host-` cannot be set on http://).
+- Magic links: hashed, 15 minutes, single use. GET `?token=` 303s to a token-free confirm URL (`no-referrer`); POST consume with CSRF. Confirm page names the account email. Same 302 and a minimum issuance time for unknown emails, including when rate-limited. D1 sliding window: 5 / 15 min per email, 20 / 15 min per IP. Never log the raw token. **Never log `/auth/magic` query strings in production** (Cloudflare request logs, access logs, reverse proxies) — the first email click still carries `?token=`.
 - Cloudflare Access: honor only when `AUTH_MODE=access` and `Cf-Access-Jwt-Assertion` verifies against the team JWKS (`CF_ACCESS_TEAM_DOMAIN` + `CF_ACCESS_AUD`). Ignore `Cf-Access-Authenticated-User-Email` otherwise. `/health` and `/health/` never mint a session.
 - `ALLOW_DEV_LOGIN=true` is local/test only. Production vars leave it empty.
 - CSRF on authenticated POSTs, logout (POST only), and magic-link consume. Compare constant-time with no length short-circuit.
@@ -52,7 +52,7 @@ Application helpers: `src/domain/social.ts`. Tests fail if a password-like colum
 
 Types: `dev`, `task`.  
 Stages: `backlog` → `ready` → `in-dev` → `in-qa` → `needs-adam` → `closed`.  
-QA is separate: a ticket can leave `in-qa` only through `/qa`. Fail → `in-dev`. Pass → `needs-adam`. Both paths set `qa_by` / `qa_result` / `qa_date`. History rows are append-only.
+QA is separate: a ticket can leave `in-qa` only through `/qa`. Fail → `in-dev`. Pass → `needs-adam`. Both paths set `qa_by` / `qa_result` / `qa_date`. History rows are append-only. Ticket create / transition / QA + the history row must be a single D1 `batch()`. Board **Go** POSTs `return_to=board` and redirects to `/admin/tickets?notice=Moved#<stage>` (no JS; `script-src 'none'`).
 
 Logic lives in `src/domain/tickets.ts` so HTTP handlers stay thin.
 

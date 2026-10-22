@@ -93,4 +93,32 @@ describe("security headers", () => {
     expectCommonSecurityHeaders(http);
     expect(http.headers.get("Strict-Transport-Security")).toBeNull();
   });
+
+  it("serves /favicon.ico and /favicon.svg instead of 404", async () => {
+    const ico = "ico-bytes";
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg"></svg>';
+    const assets = mockAssetsFetcher({
+      "/favicon.ico": { body: ico, contentType: "image/x-icon" },
+      "/favicon.svg": { body: svg, contentType: "image/svg+xml" },
+    });
+
+    const icon = await workerFetchWithEnv("https://crm.test/favicon.ico", undefined, { ASSETS: assets });
+    expect(icon.status).toBe(200);
+    expect(new TextDecoder().decode(await icon.arrayBuffer())).toBe(ico);
+    expectCommonSecurityHeaders(icon);
+
+    const mark = await workerFetchWithEnv("https://crm.test/favicon.svg", undefined, { ASSETS: assets });
+    expect(mark.status).toBe(200);
+    expect(await mark.text()).toBe(svg);
+    expectCommonSecurityHeaders(mark);
+
+    const loginPage = await workerFetch("https://crm.test/login");
+    const html = await loginPage.text();
+    expect(html).toMatch(/rel="icon"[^>]*href="\/favicon.svg"/);
+    expect(html).toMatch(/rel="icon"[^>]*href="\/favicon.ico"/);
+
+    const live = await workerFetch("https://crm.test/favicon.ico");
+    expect(live.status).toBe(200);
+    expect(live.headers.get("Content-Type") ?? "").toMatch(/icon|octet-stream|image\//);
+  });
 });

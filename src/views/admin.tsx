@@ -534,7 +534,7 @@ export function TicketBoardPage(props: {
       <h1>Ticket board</h1>
       <div class="board">
         {TICKET_STAGES.map((stage) => (
-          <section class="lane">
+          <section class="lane" id={stage}>
             <h2>{stage}</h2>
             {props.tickets
               .filter((t) => t.stage === stage)
@@ -546,15 +546,21 @@ export function TicketBoardPage(props: {
                     {ticket.customer_name ? ` · ${ticket.customer_name}` : " · internal"}
                   </small>
                   {allowedTransitions(ticket.stage).length > 0 ? (
-                    <form method="post" action={`/admin/tickets/${ticket.id}/transition`}>
+                    <form class="move" method="post" action={`/admin/tickets/${ticket.id}/transition`}>
                       <Csrf token={props.csrf} />
-                      <select name="to" required>
-                        <option value="">Move…</option>
-                        {allowedTransitions(ticket.stage).map((next) => (
-                          <option value={next}>{next}</option>
-                        ))}
-                      </select>
-                      <button type="submit">Go</button>
+                      <input type="hidden" name="return_to" value="board" />
+                      <label>
+                        <span class="visually-hidden">Move {ticket.title} to</span>
+                        <select name="to" required>
+                          <option value="">Move…</option>
+                          {allowedTransitions(ticket.stage).map((next) => (
+                            <option value={next}>{next}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <button type="submit" aria-label={`Go, move ${ticket.title}`}>
+                        Go
+                      </button>
                     </form>
                   ) : ticket.stage === "in-qa" ? (
                     <p class="hint">

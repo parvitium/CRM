@@ -33,6 +33,7 @@ describe("schema and social storage", () => {
       "users",
       "sessions",
       "magic_links",
+      "rate_limit_events",
     ]) {
       expect(names).toContain(required);
     }

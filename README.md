@@ -2,7 +2,7 @@
 
 Internal CRM for [Parvitium LLC](https://parvitium.com) (local web design + marketing for small contractors in Tooele County, UT) and [TooeleTrades.com](https://tooeeletrades.com). Built from Adam Lundell’s handwritten admin/portal spec.
 
-This is a **working foundation**, not a production cutover. Integrations are mocked. **Do not deploy and do not create Cloudflare resources from this repo until Adam replaces the placeholder D1 id and secrets.**
+This is a **working foundation**, not a production cutover. Integrations are mocked. **Do not deploy and do not create Cloudflare resources from this repo until the pre-deploy checklist below is done.** The `database_id` in `wrangler.jsonc` is a placeholder on purpose.
 
 ## Architecture
 
@@ -75,8 +75,8 @@ CI runs the same three commands. There is **no deploy job**.
 ## Auth
 
 - **Roles:** `admin` (Adam) and `customer` (one portal user per customer).
-- **Session:** random token, SHA-256 stored in `sessions`, `HttpOnly` + `SameSite=Lax` cookie (`pv_session`). Raw tokens are never stored.
-- **Magic link:** 15-minute, single-use, hashed token. GET `?token=` stores the token in an HttpOnly cookie and 303s to `/auth/magic` (no token in the URL, `Referrer-Policy: no-referrer`). The confirm page shows the account email. POST `/auth/magic/consume` spends it (CSRF + atomic `UPDATE … WHERE used_at IS NULL`). Issuance takes a minimum time and returns the same response whether or not the email exists. The raw token is never logged. **Do not log `/auth/magic` query strings in production** — the first email click still carries `?token=` in the URL (history, proxies, Cloudflare request logs).
+- **Session:** random token, SHA-256 stored in `sessions`. On HTTPS the cookie is `__Host-pv_session` (`Secure`, `Path=/`, no `Domain`, `HttpOnly`, `SameSite=Lax`). **Dev fallback:** local `wrangler dev` is `http://127.0.0.1`, and `__Host-` cookies cannot be set without `Secure`, so HTTP uses `pv_session` with `Path=/`, `HttpOnly`, `SameSite=Lax`, and no `Secure`. Raw tokens are never stored.
+- **Magic link:** 15-minute, single-use, hashed token. GET `?token=` stores the token in an HttpOnly cookie and 303s to `/auth/magic` (no token in the URL, `Referrer-Policy: no-referrer`). The confirm page shows the account email. POST `/auth/magic/consume` spends it (CSRF + atomic `UPDATE … WHERE used_at IS NULL`). Issuance takes a minimum time and returns the same 302 whether or not the email exists, including when rate-limited. Issuance is limited per email and per IP (D1 sliding window, 5 / 15 min per email, 20 / 15 min per IP). The raw token is never logged. **Do not log `/auth/magic` query strings in production** — the first email click still carries `?token=` in the URL (history, proxies, Cloudflare request logs).
 - **Cloudflare Access:** only when `AUTH_MODE=access` and `Cf-Access-Jwt-Assertion` verifies against the team JWKS (`CF_ACCESS_TEAM_DOMAIN` + `CF_ACCESS_AUD`). The `Cf-Access-Authenticated-User-Email` header is ignored otherwise. `/health` and `/health/` never mint a session.
 - **Dev login:** only when `ALLOW_DEV_LOGIN=true` (`.dev.vars` / CI). Production `wrangler.jsonc` sets this to empty.
 - **CSRF:** required on authenticated POSTs and logout (`csrf` form field or `X-CSRF-Token`). Comparison is constant-time with no length short-circuit. Logout is POST only.
@@ -87,7 +87,7 @@ CI runs the same three commands. There is **no deploy job**.
 
 `migrations/0001_init.sql` creates:
 
-customers, packages, subscriptions, payments, website_templates, websites, social_accounts, gbp_profiles, seo_snapshots, call_logs, review_items, messages, flags, tickets, ticket_history, users, sessions, magic_links, outbound_emails.
+customers, packages, subscriptions, payments, website_templates, websites, social_accounts, gbp_profiles, seo_snapshots, call_logs, review_items, messages, flags, tickets, ticket_history, users, sessions, magic_links, outbound_emails, rate_limit_events.
 
 Ticket types: `dev` | `task`.  
 Stages: `backlog` → `ready` → `in-dev` → `in-qa` → `needs-adam` → `closed`.  
@@ -114,7 +114,18 @@ Packages in seed (TooeleTrades prices are from Adam; several Parvitium prices ar
 | Cloudflare Access | JWT + JWKS when `AUTH_MODE=access` | Email header alone is ignored. Dashboard not configured. |
 | R2 recordings | Not bound | Commented in `wrangler.jsonc`. |
 
-`wrangler.jsonc` uses a **placeholder** `database_id`. Do not omit it (Wrangler may auto-provision). Do not run `wrangler d1 create` or `wrangler deploy` until Adam decides to.
+`wrangler.jsonc` uses a **placeholder** `database_id` (`00000000-0000-4000-8000-000000000001`). Do not omit it (Wrangler may auto-provision). Do not run `wrangler d1 create` or `wrangler deploy` until the checklist below is complete.
+
+## Pre-deploy checklist (do not skip)
+
+Nothing in this repo should create Cloudflare resources or ship to production by accident. Local `npm run dry-run` only packages. CI has **no deploy job**.
+
+1. **Create the D1 database** — `wrangler d1 create parvitium-crm` (Adam, when ready). Copy the returned UUID.
+2. **Set its id** — replace the placeholder `database_id` in `wrangler.jsonc` with that UUID. Leave the placeholder in git until then.
+3. **Run migrations** — `wrangler d1 migrations apply parvitium-crm` against the remote DB (after the real id is set). Then seed only if you intend to.
+4. **Access setup** — decide magic-link + Resend vs Cloudflare Access. If Access: set `AUTH_MODE=access`, `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, and put the Worker behind an Access policy. Keep `ALLOW_DEV_LOGIN` empty in production vars.
+5. **Secrets** — `wrangler secret put` for anything that is not a committed var. Never put secrets in `wrangler.jsonc` or git.
+6. **Then** deploy — `wrangler deploy` only after 1–5. Do not deploy with the placeholder D1 id.
 
 ## Phased roadmap
 

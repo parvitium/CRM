@@ -1,6 +1,8 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { EMAILS } from "../../src/ids";
-import { json, login, seedSql } from "../helpers";
+import { env } from "cloudflare:workers";
+import { commitTicketWrite, createTicket, getTicket, transitionTicket } from "../../src/db/queries";
+import { EMAILS, USER_IDS } from "../../src/ids";
+import { hiddenInput, json, login, seedSql, workerFetch } from "../helpers";
 
 describe("ticket workflow", () => {
   beforeAll(async () => {
@@ -133,5 +135,124 @@ describe("ticket workflow", () => {
     );
     expect(skipped.status).toBe(400);
     expect(skipped.body.error).toMatch(/Cannot move/);
+  });
+
+  it("writes ticket create and history in one D1 batch and rolls back together", async () => {
+    const batches: number[] = [];
+    const db = new Proxy(env.DB, {
+      get(target, prop, receiver) {
+        if (prop === "batch") {
+          return (statements: D1PreparedStatement[]) => {
+            batches.push(statements.length);
+            return target.batch(statements);
+          };
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    }) as D1Database;
+
+    const id = await createTicket(db, {
+      title: "Atomic create",
+      type: "task",
+      actorUserId: USER_IDS.adam,
+    });
+    expect(batches).toEqual([2]);
+    const history = await env.DB.prepare("SELECT COUNT(*) AS n FROM ticket_history WHERE ticket_id = ?")
+      .bind(id)
+      .first<{ n: number }>();
+    expect(history?.n).toBe(1);
+
+    const title = `orphan-${crypto.randomUUID()}`;
+    await expect(
+      createTicket(env.DB, {
+        title,
+        type: "task",
+        actorUserId: "00000000-0000-4000-8000-000000000099",
+      }),
+    ).rejects.toThrow();
+    const leftover = await env.DB.prepare("SELECT id FROM tickets WHERE title = ?").bind(title).first();
+    expect(leftover).toBeNull();
+  });
+
+  it("rolls back a stage change when the history insert fails", async () => {
+    const id = await createTicket(env.DB, {
+      title: "Atomic transition",
+      type: "task",
+      actorUserId: USER_IDS.adam,
+    });
+    await expect(
+      transitionTicket(env.DB, {
+        ticketId: id,
+        to: "ready",
+        actorUserId: "00000000-0000-4000-8000-000000000099",
+      }),
+    ).rejects.toThrow();
+    const ticket = await getTicket(env.DB, id);
+    expect(ticket?.stage).toBe("backlog");
+    const history = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM ticket_history WHERE ticket_id = ? AND to_stage = 'ready'",
+    )
+      .bind(id)
+      .first<{ n: number }>();
+    expect(history?.n).toBe(0);
+  });
+
+  it("uses D1 batch for a two-statement ticket write helper", async () => {
+    let seen = 0;
+    const db = new Proxy(env.DB, {
+      get(target, prop, receiver) {
+        if (prop === "batch") {
+          return (statements: D1PreparedStatement[]) => {
+            seen = statements.length;
+            return target.batch(statements);
+          };
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    }) as D1Database;
+    await commitTicketWrite(db, [
+      env.DB.prepare("SELECT 1"),
+      env.DB.prepare("SELECT 2"),
+    ]);
+    expect(seen).toBe(2);
+  });
+
+  it("keeps board Go on the board at the destination column", async () => {
+    const adam = await login(EMAILS.adam);
+    const created = await json<{ id: string }>("/api/admin/tickets", {
+      cookie: adam.cookie,
+      csrf: adam.csrf,
+      method: "POST",
+      body: { title: "Board stay put", type: "task" },
+    });
+    const board = await workerFetch("https://crm.test/admin/tickets", {
+      headers: { Cookie: adam.cookie },
+    });
+    const html = await board.text();
+    expect(board.status).toBe(200);
+    expect(html).toMatch(/id="backlog"/);
+    expect(html).toMatch(/id="in-dev"/);
+    expect(html).toContain(`action="/admin/tickets/${created.body.id}/transition"`);
+    expect(html).toContain('name="return_to" value="board"');
+    expect(html).toContain(`aria-label="Go, move Board stay put"`);
+    expect(html).toContain(`<span class="visually-hidden">Move Board stay put to</span>`);
+
+    const moved = await workerFetch(`https://crm.test/admin/tickets/${created.body.id}/transition`, {
+      method: "POST",
+      headers: {
+        Cookie: adam.cookie,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ csrf: adam.csrf, to: "ready", return_to: "board" }).toString(),
+      redirect: "manual",
+    });
+    expect(moved.status).toBe(302);
+    expect(moved.headers.get("Location")).toMatch(/\/admin\/tickets\?notice=Moved#ready$/);
+
+    const detail = await workerFetch(`https://crm.test/admin/tickets/${created.body.id}`, {
+      headers: { Cookie: adam.cookie },
+    });
+    const detailHtml = await detail.text();
+    expect(hiddenInput(detailHtml, "return_to")).toBeNull();
   });
 });

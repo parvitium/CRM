@@ -1,8 +1,15 @@
 import { sha256Hex, randomToken, nowIso, daysFromNowIso } from "./crypto";
 import type { Actor } from "../domain/authz";
 
-const COOKIE = "pv_session";
+/** HTTPS / production name. Requires Secure + Path=/ and forbids Domain. */
+export const HOST_SESSION_COOKIE = "__Host-pv_session";
+/**
+ * HTTP fallback for local `wrangler dev` (http://127.0.0.1). `__Host-` cookies
+ * cannot be set without the Secure flag, which browsers drop on http://.
+ */
+export const DEV_SESSION_COOKIE = "pv_session";
 const SESSION_DAYS = 14;
+const SESSION_MAX_AGE = SESSION_DAYS * 24 * 60 * 60;
 
 export type SessionRow = {
   id: string;
@@ -11,6 +18,14 @@ export type SessionRow = {
   csrf_token: string;
   expires_at: string;
 };
+
+export function isHttpsRequest(requestUrl: string): boolean {
+  return new URL(requestUrl).protocol === "https:";
+}
+
+export function sessionCookieName(requestUrl: string): string {
+  return isHttpsRequest(requestUrl) ? HOST_SESSION_COOKIE : DEV_SESSION_COOKIE;
+}
 
 export async function createSession(
   db: D1Database,
@@ -35,7 +50,7 @@ export async function loadActorFromCookie(
   db: D1Database,
   cookieHeader: string | null,
 ): Promise<{ actor: Actor; csrfToken: string; sessionId: string } | null> {
-  const raw = readCookie(cookieHeader, COOKIE);
+  const raw = readCookie(cookieHeader, HOST_SESSION_COOKIE) ?? readCookie(cookieHeader, DEV_SESSION_COOKIE);
   if (!raw) {
     return null;
   }
@@ -86,27 +101,21 @@ export async function destroySession(db: D1Database, sessionId: string): Promise
 }
 
 export function sessionCookie(rawToken: string, requestUrl: string): string {
-  const secure = new URL(requestUrl).protocol === "https:";
-  const parts = [
-    `${COOKIE}=${rawToken}`,
-    "Path=/",
-    "HttpOnly",
-    "SameSite=Lax",
-    `Max-Age=${SESSION_DAYS * 24 * 60 * 60}`,
-  ];
-  if (secure) {
-    parts.push("Secure");
-  }
-  return parts.join("; ");
+  const https = isHttpsRequest(requestUrl);
+  return formatSessionCookie(sessionCookieName(requestUrl), rawToken, SESSION_MAX_AGE, https);
 }
 
 export function clearSessionCookie(requestUrl: string): string {
-  const secure = new URL(requestUrl).protocol === "https:";
-  const parts = [`${COOKIE}=`, "Path=/", "HttpOnly", "SameSite=Lax", "Max-Age=0"];
-  if (secure) {
-    parts.push("Secure");
-  }
-  return parts.join("; ");
+  const https = isHttpsRequest(requestUrl);
+  return formatSessionCookie(sessionCookieName(requestUrl), "", 0, https);
+}
+
+/** Clear both names so an HTTP leftover cannot outlive an HTTPS login. */
+export function clearSessionCookies(): string[] {
+  return [
+    formatSessionCookie(DEV_SESSION_COOKIE, "", 0, false),
+    formatSessionCookie(HOST_SESSION_COOKIE, "", 0, true),
+  ];
 }
 
 export function readCookie(header: string | null, name: string): string | null {
@@ -120,4 +129,12 @@ export function readCookie(header: string | null, name: string): string | null {
     }
   }
   return null;
+}
+
+function formatSessionCookie(name: string, value: string, maxAge: number, secure: boolean): string {
+  const parts = [`${name}=${value}`, "Path=/", "HttpOnly", "SameSite=Lax", `Max-Age=${maxAge}`];
+  if (secure) {
+    parts.push("Secure");
+  }
+  return parts.join("; ");
 }

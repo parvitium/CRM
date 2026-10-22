@@ -248,7 +248,13 @@ adminRoutes.post("/tickets/:id/transition", async (c) => {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Move failed";
+    if (form.return_to === "board") {
+      return c.redirect(`/admin/tickets?error=${encodeURIComponent(message)}`);
+    }
     return c.redirect(`/admin/tickets/${c.req.param("id")}?error=${encodeURIComponent(message)}`);
+  }
+  if (form.return_to === "board") {
+    return c.redirect(`/admin/tickets?notice=Moved#${encodeURIComponent(to)}`);
   }
   return c.redirect(`/admin/tickets/${c.req.param("id")}?notice=Moved`);
 });

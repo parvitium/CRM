@@ -6,11 +6,14 @@ import {
   createMagicCsrf,
   issueMagicLink,
   magicCsrfCookie,
+  MAGIC_ISSUE_MIN_MS,
   magicTokenCookie,
+  padElapsed,
   peekMagicLink,
   readMagicCsrf,
   readMagicToken,
 } from "../auth/magic-link";
+import { allowMagicLinkIssue, clientIp } from "../auth/rate-limit";
 import { timingSafeEqual } from "../auth/crypto";
 import { createSession, sessionCookie } from "../auth/session";
 import type { AppEnv } from "../app-env";
@@ -47,7 +50,13 @@ authRoutes.post("/auth/magic", async (c) => {
     return c.redirect("/login?error=Enter+a+valid+email");
   }
   const origin = new URL(c.req.url).origin;
-  await issueMagicLink(c.env.DB, c.get("adapters").email, email, origin);
+  const started = Date.now();
+  const allowed = await allowMagicLinkIssue(c.env.DB, email, clientIp(c.req.raw));
+  if (allowed) {
+    await issueMagicLink(c.env.DB, c.get("adapters").email, email, origin);
+  } else {
+    await padElapsed(started, MAGIC_ISSUE_MIN_MS);
+  }
   return c.redirect("/login?notice=If+that+email+has+an+account,+a+link+is+on+the+way");
 });
 
@@ -118,6 +127,9 @@ authRoutes.all("/logout", async (c) => {
     c.header("Allow", "POST");
     return c.text("Method Not Allowed", 405);
   }
-  c.header("Set-Cookie", await signOut(c));
+  const cookies = await signOut(c);
+  cookies.forEach((cookie, index) => {
+    c.header("Set-Cookie", cookie, index === 0 ? undefined : { append: true });
+  });
   return c.redirect("/login");
 });

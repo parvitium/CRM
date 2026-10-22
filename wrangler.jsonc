@@ -24,7 +24,9 @@
     {
       "binding": "DB",
       "database_name": "parvitium-crm",
-      // Placeholder only. Replace after `wrangler d1 create parvitium-crm`.
+      // PLACEHOLDER. Do not deploy with this UUID.
+      // Pre-deploy: wrangler d1 create parvitium-crm → paste the real
+      // database_id here → wrangler d1 migrations apply parvitium-crm.
       // Do not omit this field — Wrangler may auto-provision a remote DB.
       "database_id": "00000000-0000-4000-8000-000000000001",
       "migrations_dir": "migrations",

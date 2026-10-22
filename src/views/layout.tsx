@@ -51,6 +51,8 @@ export function Layout(props: {
           <meta name="referrer" content="no-referrer" />
         ) : null}
         <title>{props.title} · Parvitium CRM</title>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="icon" href="/favicon.ico" sizes="any" />
         <link
           rel="stylesheet"
           href="/styles.css"

@@ -2,7 +2,7 @@ import { createMiddleware } from "hono/factory";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { loadActorFromAccess } from "../auth/access";
 import {
-  clearSessionCookie,
+  clearSessionCookies,
   createSession,
   destroySession,
   loadActorFromCookie,
@@ -117,12 +117,16 @@ export function handleError(err: unknown, c: Context<AppEnv>): Response {
   return res;
 }
 
-export async function signOut(c: { env: Env; req: { url: string }; get: (k: "sessionId") => string | null }) {
+export async function signOut(c: {
+  env: Env;
+  req: { url: string };
+  get: (k: "sessionId") => string | null;
+}): Promise<string[]> {
   const sessionId = c.get("sessionId");
   if (sessionId) {
     await destroySession(c.env.DB, sessionId);
   }
-  return clearSessionCookie(c.req.url);
+  return clearSessionCookies();
 }
 
 function escapeHtml(value: string): string {

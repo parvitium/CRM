@@ -442,20 +442,20 @@ export async function createTicket(
 ): Promise<string> {
   const id = crypto.randomUUID();
   const ts = nowIso();
-  await db
-    .prepare(
-      `INSERT INTO tickets (id, customer_id, title, description, type, stage, assigned_to, qa_by, qa_result, qa_date, qa_notes, created_at, updated_at, closed_at)
-       VALUES (?, ?, ?, ?, ?, 'backlog', NULL, NULL, NULL, NULL, NULL, ?, ?, NULL)`,
-    )
-    .bind(id, input.customerId ?? null, input.title, input.description ?? null, input.type, ts, ts)
-    .run();
-  await db
-    .prepare(
-      `INSERT INTO ticket_history (id, ticket_id, from_stage, to_stage, actor_user_id, note, created_at)
-       VALUES (?, ?, NULL, 'backlog', ?, 'Created', ?)`,
-    )
-    .bind(crypto.randomUUID(), id, input.actorUserId, ts)
-    .run();
+  await commitTicketWrite(db, [
+    db
+      .prepare(
+        `INSERT INTO tickets (id, customer_id, title, description, type, stage, assigned_to, qa_by, qa_result, qa_date, qa_notes, created_at, updated_at, closed_at)
+         VALUES (?, ?, ?, ?, ?, 'backlog', NULL, NULL, NULL, NULL, NULL, ?, ?, NULL)`,
+      )
+      .bind(id, input.customerId ?? null, input.title, input.description ?? null, input.type, ts, ts),
+    db
+      .prepare(
+        `INSERT INTO ticket_history (id, ticket_id, from_stage, to_stage, actor_user_id, note, created_at)
+         VALUES (?, ?, NULL, 'backlog', ?, 'Created', ?)`,
+      )
+      .bind(crypto.randomUUID(), id, input.actorUserId, ts),
+  ]);
   return id;
 }
 
@@ -470,29 +470,29 @@ export async function transitionTicket(
   assertCanTransition(ticket.stage, input.to);
   const ts = nowIso();
   const closedAt = input.to === "closed" ? ts : null;
-  await db
-    .prepare(
-      `UPDATE tickets
-       SET stage = ?, updated_at = ?, closed_at = ?, qa_result = CASE WHEN ? = 'in-qa' THEN NULL ELSE qa_result END
-       WHERE id = ?`,
-    )
-    .bind(input.to, ts, closedAt, input.to, input.ticketId)
-    .run();
-  await db
-    .prepare(
-      `INSERT INTO ticket_history (id, ticket_id, from_stage, to_stage, actor_user_id, note, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .bind(
-      crypto.randomUUID(),
-      input.ticketId,
-      ticket.stage,
-      input.to,
-      input.actorUserId,
-      input.note ?? null,
-      ts,
-    )
-    .run();
+  await commitTicketWrite(db, [
+    db
+      .prepare(
+        `UPDATE tickets
+         SET stage = ?, updated_at = ?, closed_at = ?, qa_result = CASE WHEN ? = 'in-qa' THEN NULL ELSE qa_result END
+         WHERE id = ?`,
+      )
+      .bind(input.to, ts, closedAt, input.to, input.ticketId),
+    db
+      .prepare(
+        `INSERT INTO ticket_history (id, ticket_id, from_stage, to_stage, actor_user_id, note, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        crypto.randomUUID(),
+        input.ticketId,
+        ticket.stage,
+        input.to,
+        input.actorUserId,
+        input.note ?? null,
+        ts,
+      ),
+  ]);
   const updated = await getTicket(db, input.ticketId);
   if (!updated) {
     throw new Error("Ticket missing after update");
@@ -511,33 +511,43 @@ export async function submitQa(
   assertCanSubmitQa(ticket.stage);
   const next = stageAfterQa(input.result);
   const ts = nowIso();
-  await db
-    .prepare(
-      `UPDATE tickets
-       SET stage = ?, qa_by = ?, qa_result = ?, qa_date = ?, qa_notes = ?, updated_at = ?
-       WHERE id = ?`,
-    )
-    .bind(next, input.actorUserId, input.result, ts, input.notes ?? null, ts, input.ticketId)
-    .run();
-  await db
-    .prepare(
-      `INSERT INTO ticket_history (id, ticket_id, from_stage, to_stage, actor_user_id, note, created_at)
-       VALUES (?, ?, 'in-qa', ?, ?, ?, ?)`,
-    )
-    .bind(
-      crypto.randomUUID(),
-      input.ticketId,
-      next,
-      input.actorUserId,
-      `QA ${input.result}${input.notes ? `: ${input.notes}` : ""}`,
-      ts,
-    )
-    .run();
+  await commitTicketWrite(db, [
+    db
+      .prepare(
+        `UPDATE tickets
+         SET stage = ?, qa_by = ?, qa_result = ?, qa_date = ?, qa_notes = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .bind(next, input.actorUserId, input.result, ts, input.notes ?? null, ts, input.ticketId),
+    db
+      .prepare(
+        `INSERT INTO ticket_history (id, ticket_id, from_stage, to_stage, actor_user_id, note, created_at)
+         VALUES (?, ?, 'in-qa', ?, ?, ?, ?)`,
+      )
+      .bind(
+        crypto.randomUUID(),
+        input.ticketId,
+        next,
+        input.actorUserId,
+        `QA ${input.result}${input.notes ? `: ${input.notes}` : ""}`,
+        ts,
+      ),
+  ]);
   const updated = await getTicket(db, input.ticketId);
   if (!updated) {
     throw new Error("Ticket missing after QA");
   }
   return updated;
+}
+
+/** Ticket row + history row in one D1 batch so a mid-flight failure cannot desync them. */
+export async function commitTicketWrite(db: D1Database, statements: D1PreparedStatement[]): Promise<void> {
+  const results = await db.batch(statements);
+  for (const result of results) {
+    if (!result.success) {
+      throw new Error("Ticket write failed");
+    }
+  }
 }
 
 export async function listPackages(db: D1Database) {

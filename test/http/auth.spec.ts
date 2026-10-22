@@ -3,9 +3,18 @@ import { env } from "cloudflare:workers";
 import { ACCESS_EMAIL_HEADER, ACCESS_JWT_HEADER, resetAccessTestHooks, setAccessJwksFetcher } from "../../src/auth/access";
 import { sha256Hex } from "../../src/auth/crypto";
 import { MAGIC_ISSUE_MIN_MS } from "../../src/auth/magic-link";
+import {
+  MAGIC_EMAIL_LIMIT,
+  MAGIC_IP_LIMIT,
+  magicEmailBucket,
+  magicIpBucket,
+  seedRateLimitEvents,
+} from "../../src/auth/rate-limit";
+import { HOST_SESSION_COOKIE } from "../../src/auth/session";
 import { EMAILS } from "../../src/ids";
 import {
   consumeMagic,
+  getSetCookies,
   hiddenInput,
   issueMagicToken,
   json,
@@ -82,6 +91,119 @@ describe("auth", () => {
       .bind("nobody@example.test")
       .first<{ n: number }>();
     expect(unknownLinks?.n).toBe(0);
+  });
+
+  it("sets __Host-pv_session on HTTPS with Secure, Path=/, no Domain", async () => {
+    const res = await workerFetch("https://crm.test/auth/dev-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ email: EMAILS.adam }).toString(),
+      redirect: "manual",
+    });
+    const cookie = getSetCookies(res).find((part) => part.includes("pv_session=")) ?? "";
+    expect(cookie.startsWith(`${HOST_SESSION_COOKIE}=`)).toBe(true);
+    expect(cookie).toMatch(/;\s*Secure(?:;|$)/);
+    expect(cookie).toMatch(/;\s*Path=\/(?:;|$)/);
+    expect(cookie).toMatch(/HttpOnly/);
+    expect(cookie).toMatch(/SameSite=Lax/);
+    expect(cookie).not.toMatch(/;\s*Domain=/i);
+  });
+
+  it("falls back to pv_session without Secure on HTTP", async () => {
+    const res = await workerFetch("http://127.0.0.1:8787/auth/dev-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ email: EMAILS.summit }).toString(),
+      redirect: "manual",
+    });
+    const cookie = getSetCookies(res).find((part) => part.includes("pv_session=")) ?? "";
+    expect(cookie.startsWith("pv_session=")).toBe(true);
+    expect(cookie).not.toContain("__Host-");
+    expect(cookie).not.toMatch(/;\s*Secure(?:;|$)/);
+    expect(cookie).toMatch(/;\s*Path=\/(?:;|$)/);
+    expect(cookie).toMatch(/HttpOnly/);
+    expect(cookie).toMatch(/SameSite=Lax/);
+  });
+
+  it("rate-limits magic-link issuance per email without changing the 302", async () => {
+    const email = `flood.${crypto.randomUUID()}@example.test`;
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, display_name, role, customer_id, created_at)
+       VALUES (?, ?, 'Rate Limit', 'admin', NULL, ?)`,
+    )
+      .bind(crypto.randomUUID(), email, new Date().toISOString())
+      .run();
+    await seedRateLimitEvents(env.DB, await magicEmailBucket(email), MAGIC_EMAIL_LIMIT);
+    const ip = `198.51.100.${Math.floor(Math.random() * 200) + 1}`;
+    const before = await env.DB.prepare("SELECT COUNT(*) AS n FROM outbound_emails WHERE to_email = ?")
+      .bind(email)
+      .first<{ n: number }>();
+
+    const known = await workerFetch("https://crm.test/auth/magic", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "CF-Connecting-IP": ip,
+      },
+      body: new URLSearchParams({ email }).toString(),
+      redirect: "manual",
+    });
+    const unknown = await workerFetch("https://crm.test/auth/magic", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "CF-Connecting-IP": ip,
+      },
+      body: new URLSearchParams({ email: `nobody.${crypto.randomUUID()}@example.test` }).toString(),
+      redirect: "manual",
+    });
+
+    expect(known.status).toBe(302);
+    expect(unknown.status).toBe(302);
+    expect(known.headers.get("Location")).toBe(unknown.headers.get("Location"));
+    expect(known.headers.get("Location")).toMatch(/notice=If\+that\+email\+has\+an\+account/);
+    expect(await known.text()).toBe(await unknown.text());
+    const after = await env.DB.prepare("SELECT COUNT(*) AS n FROM outbound_emails WHERE to_email = ?")
+      .bind(email)
+      .first<{ n: number }>();
+    expect(after?.n ?? 0).toBe(before?.n ?? 0);
+  });
+
+  it("rate-limits magic-link issuance per IP without revealing accounts", async () => {
+    const ip = `203.0.113.${Math.floor(Math.random() * 200) + 1}`;
+    await seedRateLimitEvents(env.DB, await magicIpBucket(ip), MAGIC_IP_LIMIT);
+    const emailA = `ip-a.${crypto.randomUUID()}@example.test`;
+    const emailB = EMAILS.copper;
+    const before = await env.DB.prepare("SELECT COUNT(*) AS n FROM outbound_emails WHERE to_email = ?")
+      .bind(emailB)
+      .first<{ n: number }>();
+
+    const unknown = await workerFetch("https://crm.test/auth/magic", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "CF-Connecting-IP": ip,
+      },
+      body: new URLSearchParams({ email: emailA }).toString(),
+      redirect: "manual",
+    });
+    const known = await workerFetch("https://crm.test/auth/magic", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "CF-Connecting-IP": ip,
+      },
+      body: new URLSearchParams({ email: emailB }).toString(),
+      redirect: "manual",
+    });
+
+    expect(known.status).toBe(302);
+    expect(unknown.status).toBe(302);
+    expect(known.headers.get("Location")).toBe(unknown.headers.get("Location"));
+    const after = await env.DB.prepare("SELECT COUNT(*) AS n FROM outbound_emails WHERE to_email = ?")
+      .bind(emailB)
+      .first<{ n: number }>();
+    expect(after?.n ?? 0).toBe(before?.n ?? 0);
   });
 
   it("does not log the raw magic-link token", async () => {
