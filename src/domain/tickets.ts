@@ -18,7 +18,8 @@ const ALLOWED: Record<TicketStage, readonly TicketStage[]> = {
   backlog: ["ready"],
   ready: ["backlog", "in-dev"],
   "in-dev": ["ready", "in-qa"],
-  "in-qa": ["in-dev", "needs-adam"],
+  // Leave in-qa only through submitQa (sets qa_by / qa_result / qa_date).
+  "in-qa": [],
   "needs-adam": ["in-dev", "closed"],
   closed: ["backlog"],
 };
@@ -49,6 +50,9 @@ export function stageAfterQa(result: QaResult): TicketStage {
 }
 
 export function assertCanTransition(from: TicketStage, to: TicketStage): void {
+  if (from === "in-qa") {
+    throw new Error("Tickets in-qa can only leave through QA");
+  }
   if (!canTransition(from, to)) {
     throw new Error(`Cannot move a ticket from ${from} to ${to}`);
   }

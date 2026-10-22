@@ -7,6 +7,8 @@ interface __BaseEnv_Env {
 	APP_NAME: "Parvitium CRM";
 	AUTH_MODE: "magic";
 	ALLOW_DEV_LOGIN: "";
+	CF_ACCESS_TEAM_DOMAIN: "";
+	CF_ACCESS_AUD: "";
 }
 declare namespace Cloudflare {
 	interface GlobalProps {
@@ -19,7 +21,7 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "APP_NAME" | "AUTH_MODE" | "ALLOW_DEV_LOGIN">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "APP_NAME" | "AUTH_MODE" | "ALLOW_DEV_LOGIN" | "CF_ACCESS_TEAM_DOMAIN" | "CF_ACCESS_AUD">> {}
 }
 declare module "*.txt" {
 	const value: string;

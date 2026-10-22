@@ -19,6 +19,8 @@ export default defineConfig(async () => {
             ALLOW_DEV_LOGIN: "true",
             AUTH_MODE: "magic",
             APP_NAME: "Parvitium CRM",
+            CF_ACCESS_TEAM_DOMAIN: "",
+            CF_ACCESS_AUD: "",
           },
         },
       }),

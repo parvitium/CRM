@@ -34,6 +34,9 @@
     "APP_NAME": "Parvitium CRM",
     "AUTH_MODE": "magic",
     "ALLOW_DEV_LOGIN": "",
+    // Required only when AUTH_MODE=access. Empty here so the header is ignored.
+    "CF_ACCESS_TEAM_DOMAIN": "",
+    "CF_ACCESS_AUD": "",
   },
   // R2 for call recordings is planned, not bound yet:
   // "r2_buckets": [{ "binding": "RECORDINGS", "bucket_name": "parvitium-crm-recordings" }]

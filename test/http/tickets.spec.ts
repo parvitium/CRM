@@ -73,6 +73,47 @@ describe("ticket workflow", () => {
     expect(passed.body.ticket.qa_result).toBe("pass");
   });
 
+  it("rejects leaving in-qa through the ordinary transition endpoint", async () => {
+    const adam = await login(EMAILS.adam);
+    const created = await json<{ id: string }>("/api/admin/tickets", {
+      cookie: adam.cookie,
+      csrf: adam.csrf,
+      method: "POST",
+      body: { title: "QA bypass attempt", type: "task" },
+    });
+    const id = created.body.id;
+    for (const to of ["ready", "in-dev", "in-qa"] as const) {
+      const moved = await json(`/api/admin/tickets/${id}/transition`, {
+        cookie: adam.cookie,
+        csrf: adam.csrf,
+        method: "POST",
+        body: { to },
+      });
+      expect(moved.status).toBe(200);
+    }
+
+    const bypass = await json<{ error?: string; ticket?: { stage: string; qa_result: string | null } }>(
+      `/api/admin/tickets/${id}/transition`,
+      {
+        cookie: adam.cookie,
+        csrf: adam.csrf,
+        method: "POST",
+        body: { to: "needs-adam" },
+      },
+    );
+    expect(bypass.status).toBe(400);
+    expect(bypass.body.error).toMatch(/QA/);
+
+    const current = await json<{ ticket: { stage: string; qa_by: string | null; qa_result: string | null; qa_date: string | null } }>(
+      `/api/admin/tickets/${id}`,
+      { cookie: adam.cookie },
+    );
+    expect(current.body.ticket.stage).toBe("in-qa");
+    expect(current.body.ticket.qa_by).toBeNull();
+    expect(current.body.ticket.qa_result).toBeNull();
+    expect(current.body.ticket.qa_date).toBeNull();
+  });
+
   it("rejects an illegal skip from backlog to closed", async () => {
     const adam = await login(EMAILS.adam);
     const created = await json<{ id: string }>("/api/admin/tickets", {

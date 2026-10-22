@@ -544,16 +544,22 @@ export function TicketBoardPage(props: {
                     {ticket.type}
                     {ticket.customer_name ? ` · ${ticket.customer_name}` : " · internal"}
                   </small>
-                  <form method="post" action={`/admin/tickets/${ticket.id}/transition`}>
-                    <Csrf token={props.csrf} />
-                    <select name="to" required>
-                      <option value="">Move…</option>
-                      {allowedTransitions(ticket.stage).map((next) => (
-                        <option value={next}>{next}</option>
-                      ))}
-                    </select>
-                    <button type="submit">Go</button>
-                  </form>
+                  {allowedTransitions(ticket.stage).length > 0 ? (
+                    <form method="post" action={`/admin/tickets/${ticket.id}/transition`}>
+                      <Csrf token={props.csrf} />
+                      <select name="to" required>
+                        <option value="">Move…</option>
+                        {allowedTransitions(ticket.stage).map((next) => (
+                          <option value={next}>{next}</option>
+                        ))}
+                      </select>
+                      <button type="submit">Go</button>
+                    </form>
+                  ) : ticket.stage === "in-qa" ? (
+                    <p class="hint">
+                      <a href={`/admin/tickets/${ticket.id}`}>Submit QA</a>
+                    </p>
+                  ) : null}
                 </article>
               ))}
           </section>
@@ -636,24 +642,28 @@ export function TicketDetailPage(props: {
       <div class="grid-2">
         <section class="panel stack">
           <h2>Move</h2>
-          <form method="post" action={`/admin/tickets/${t.id}/transition`}>
-            <Csrf token={props.csrf} />
-            <label>
-              Stage
-              <select name="to" required>
-                {allowedTransitions(t.stage).map((next) => (
-                  <option value={next}>{next}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Note
-              <input name="note" />
-            </label>
-            <button class="btn" type="submit">
-              Update stage
-            </button>
-          </form>
+          {allowedTransitions(t.stage).length > 0 ? (
+            <form method="post" action={`/admin/tickets/${t.id}/transition`}>
+              <Csrf token={props.csrf} />
+              <label>
+                Stage
+                <select name="to" required>
+                  {allowedTransitions(t.stage).map((next) => (
+                    <option value={next}>{next}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Note
+                <input name="note" />
+              </label>
+              <button class="btn" type="submit">
+                Update stage
+              </button>
+            </form>
+          ) : (
+            <p class="hint">This ticket can only leave in-qa through the QA form.</p>
+          )}
           {t.stage === "in-qa" ? (
             <form class="muted-box stack" method="post" action={`/admin/tickets/${t.id}/qa`}>
               <h3>QA pass</h3>

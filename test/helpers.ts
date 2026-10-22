@@ -1,4 +1,5 @@
 import { env, exports } from "cloudflare:workers";
+import { createApp } from "../src/app";
 import { EMAILS } from "../src/ids";
 
 export async function seedSql(): Promise<void> {
@@ -65,6 +66,80 @@ export async function login(email: string): Promise<{ cookie: string; csrf: stri
 
 export function workerFetch(input: string, init?: RequestInit): Promise<Response> {
   return exports.default.fetch(new Request(input, init));
+}
+
+/** Fetch through a fresh app with selected env overrides (e.g. AUTH_MODE=access). */
+export function workerFetchWithEnv(
+  input: string,
+  init: RequestInit | undefined,
+  overrides: Record<string, string>,
+): Promise<Response> {
+  const app = createApp();
+  const patched = new Proxy(env, {
+    get(target, prop, receiver) {
+      if (typeof prop === "string" && Object.hasOwn(overrides, prop)) {
+        return overrides[prop];
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  });
+  return app.fetch(new Request(input, init), patched);
+}
+
+export function hiddenInput(html: string, name: string): string | null {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = html.match(new RegExp(`name="${escaped}" value="([^"]*)"`));
+  return match?.[1] ?? null;
+}
+
+export async function issueMagicToken(email: string): Promise<string> {
+  await workerFetch("https://crm.test/auth/magic", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ email }).toString(),
+  });
+  const mailed = await env.DB.prepare(
+    "SELECT body FROM outbound_emails WHERE to_email = ? ORDER BY created_at DESC LIMIT 1",
+  )
+    .bind(email)
+    .first<{ body: string }>();
+  const match = mailed?.body.match(/https?:\/\/[^ ]+\/auth\/magic\?token=([a-f0-9]+)/);
+  if (!match?.[1]) {
+    throw new Error(`no magic token emailed to ${email}`);
+  }
+  return match[1];
+}
+
+export async function openMagicConfirm(
+  token: string,
+): Promise<{ status: number; html: string; csrf: string | null; cookie: string | null; setCookie: string | null }> {
+  const res = await workerFetch(`https://crm.test/auth/magic?token=${token}`, {
+    redirect: "manual",
+  });
+  const html = await res.text();
+  return {
+    status: res.status,
+    html,
+    csrf: hiddenInput(html, "csrf"),
+    cookie: readSetCookie(res),
+    setCookie: res.headers.get("Set-Cookie"),
+  };
+}
+
+export function consumeMagic(
+  token: string,
+  csrf: string,
+  cookie: string,
+): Promise<Response> {
+  return workerFetch("https://crm.test/auth/magic/consume", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Cookie: cookie,
+    },
+    body: new URLSearchParams({ token, csrf }).toString(),
+    redirect: "manual",
+  });
 }
 
 export function readSetCookie(res: Response): string | null {

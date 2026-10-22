@@ -1,7 +1,7 @@
 import { nowIso } from "../../auth/crypto";
 import type { EmailAdapter } from "../types";
 
-/** Persists outbound mail so tests and local logs can read the magic-link URL. */
+/** Persists outbound mail so tests can read the magic-link URL. Never log the raw token. */
 export class DbEmailAdapter implements EmailAdapter {
   constructor(private readonly db: D1Database) {}
 
@@ -15,6 +15,6 @@ export class DbEmailAdapter implements EmailAdapter {
       )
       .bind(crypto.randomUUID(), email, subject, body, nowIso())
       .run();
-    console.log(JSON.stringify({ msg: "mock_email", to: email, subject, url }));
+    console.log(JSON.stringify({ msg: "mock_email", to: email, subject }));
   }
 }

@@ -8,11 +8,12 @@ import {
 } from "../../src/domain/tickets";
 
 describe("ticket stage machine", () => {
-  it("follows backlog → ready → in-dev → in-qa → needs-adam → closed", () => {
+  it("follows backlog → ready → in-dev → in-qa; needs-adam only after QA", () => {
     expect(canTransition("backlog", "ready")).toBe(true);
     expect(canTransition("ready", "in-dev")).toBe(true);
     expect(canTransition("in-dev", "in-qa")).toBe(true);
-    expect(canTransition("in-qa", "needs-adam")).toBe(true);
+    expect(canTransition("in-qa", "needs-adam")).toBe(false);
+    expect(canTransition("in-qa", "in-dev")).toBe(false);
     expect(canTransition("needs-adam", "closed")).toBe(true);
   });
 
@@ -25,7 +26,8 @@ describe("ticket stage machine", () => {
   it("sends a QA fail back to in-dev and a pass to needs-adam", () => {
     expect(stageAfterQa("fail")).toBe("in-dev");
     expect(stageAfterQa("pass")).toBe("needs-adam");
-    expect(allowedTransitions("in-qa")).toContain("in-dev");
+    expect(allowedTransitions("in-qa")).toEqual([]);
+    expect(() => assertCanTransition("in-qa", "needs-adam")).toThrow(/QA/);
   });
 
   it("only allows QA while the ticket is in-qa", () => {

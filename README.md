@@ -13,7 +13,7 @@ Browser (admin or customer)
 Cloudflare Worker  (Hono)
   ├─ HTML pages (Hono JSX) + /styles.css
   ├─ JSON /api/*
-  ├─ Auth: session cookie, magic link, optional Cloudflare Access header
+  ├─ Auth: session cookie, magic link, optional Cloudflare Access JWT
   └─ Adapter ports (Stripe, GBP, SEO, Retell, reviews, email)
         │
         ▼
@@ -76,8 +76,8 @@ CI runs the same three commands. There is **no deploy job**.
 
 - **Roles:** `admin` (Adam) and `customer` (one portal user per customer).
 - **Session:** random token, SHA-256 stored in `sessions`, `HttpOnly` + `SameSite=Lax` cookie (`pv_session`). Raw tokens are never stored.
-- **Magic link:** 15-minute, single-use, hashed token. Same response whether or not the email exists.
-- **Cloudflare Access:** if `Cf-Access-Authenticated-User-Email` is present, that email is mapped to `users`. Unknown Access emails do not get a session.
+- **Magic link:** 15-minute, single-use, hashed token. GET shows a confirm page; POST `/auth/magic/consume` spends it (CSRF + atomic `UPDATE … WHERE used_at IS NULL`). Same response whether or not the email exists. The raw token is never logged.
+- **Cloudflare Access:** only when `AUTH_MODE=access` and `Cf-Access-Jwt-Assertion` verifies against the team JWKS (`CF_ACCESS_TEAM_DOMAIN` + `CF_ACCESS_AUD`). The `Cf-Access-Authenticated-User-Email` header is ignored otherwise. `/health` never mints a session.
 - **Dev login:** only when `ALLOW_DEV_LOGIN=true` (`.dev.vars` / CI). Production `wrangler.jsonc` sets this to empty.
 - **CSRF:** required on authenticated POSTs (`csrf` form field or `X-CSRF-Token`).
 - **Portal isolation:** portal queries use `actor.customerId` from the session. A customer id in the URL is never trusted for authorization.
@@ -110,7 +110,7 @@ Packages in seed (TooeleTrades prices are from Adam; several Parvitium prices ar
 | Retell / AI receptionist | Mock call logs | `recording_r2_key` reserved for R2. |
 | Review manager | Mock items + draft replies | |
 | Resend | Mock `outbound_emails` | |
-| Cloudflare Access | Header adapter | Not configured in the dashboard. |
+| Cloudflare Access | JWT + JWKS when `AUTH_MODE=access` | Email header alone is ignored. Dashboard not configured. |
 | R2 recordings | Not bound | Commented in `wrangler.jsonc`. |
 
 `wrangler.jsonc` uses a **placeholder** `database_id`. Do not omit it (Wrangler may auto-provision). Do not run `wrangler d1 create` or `wrangler deploy` until Adam decides to.

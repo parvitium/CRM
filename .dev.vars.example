@@ -2,5 +2,8 @@
 # Dev login is local-only. Production must omit ALLOW_DEV_LOGIN.
 ALLOW_DEV_LOGIN=true
 
-# AUTH_MODE is "magic" in wrangler.jsonc. Access mode is documented in README.
+# AUTH_MODE is "magic" in wrangler.jsonc. Access identity is ignored unless
+# AUTH_MODE=access and CF_ACCESS_TEAM_DOMAIN + CF_ACCESS_AUD are set.
 # AUTH_MODE=magic
+# CF_ACCESS_TEAM_DOMAIN=
+# CF_ACCESS_AUD=

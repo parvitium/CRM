@@ -15,7 +15,16 @@ import type { Context } from "hono";
 import type { AppEnv } from "../app-env";
 
 export const sessionMiddleware = createMiddleware<AppEnv>(async (c, next) => {
-  const accessActor = await loadActorFromAccess(c.env.DB, c.req.raw);
+  // Health is public and must never mint or bind a session, even if Access headers are present.
+  if (c.req.path === "/health") {
+    c.set("actor", null);
+    c.set("csrfToken", null);
+    c.set("sessionId", null);
+    await next();
+    return;
+  }
+
+  const accessActor = await loadActorFromAccess(c.env.DB, c.req.raw, c.env);
   const cookieSession = await loadActorFromCookie(c.env.DB, c.req.header("Cookie") ?? null);
 
   if (accessActor && !cookieSession) {
@@ -23,7 +32,7 @@ export const sessionMiddleware = createMiddleware<AppEnv>(async (c, next) => {
     c.header("Set-Cookie", sessionCookie(created.rawToken, c.req.url));
     c.set("actor", accessActor);
     c.set("csrfToken", created.csrfToken);
-    c.set("sessionId", null);
+    c.set("sessionId", created.sessionId);
   } else if (cookieSession) {
     if (accessActor && accessActor.id !== cookieSession.actor.id) {
       throw new HttpError(403, "Access identity does not match session");
@@ -48,6 +57,7 @@ export const csrfMiddleware = createMiddleware<AppEnv>(async (c, next) => {
   if (
     c.req.path === "/logout" ||
     c.req.path === "/auth/magic" ||
+    c.req.path === "/auth/magic/consume" ||
     c.req.path === "/auth/dev-login"
   ) {
     await next();

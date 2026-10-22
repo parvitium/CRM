@@ -1,4 +1,4 @@
-import { Layout } from "./layout";
+import { Csrf, Layout } from "./layout";
 import type { Actor } from "../domain/authz";
 
 export function LoginPage(props: {
@@ -15,8 +15,8 @@ export function LoginPage(props: {
         <p class="kicker">Parvitium · Tooele County</p>
         <h1>Sign in</h1>
         <p class="lede">
-          Magic-link email is the default. Cloudflare Access can sit in front and map the
-          authenticated email to a user. There are no passwords in this app.
+          Magic-link email is the default. Cloudflare Access is honored only when
+          AUTH_MODE=access and the Access JWT verifies. There are no passwords in this app.
         </p>
         <form class="stack" method="post" action="/auth/magic">
           <label>
@@ -46,6 +46,28 @@ export function LoginPage(props: {
             </button>
           </form>
         ) : null}
+      </section>
+    </Layout>
+  );
+}
+
+export function MagicConfirmPage(props: { token: string; csrf: string }) {
+  return (
+    <Layout title="Confirm sign-in" actor={null} path="/auth/magic">
+      <section class="panel narrow">
+        <p class="kicker">Parvitium · Tooele County</p>
+        <h1>Confirm sign-in</h1>
+        <p class="lede">
+          This link was emailed to you. Confirm below to finish signing in. The link works
+          once and will not be consumed until you submit this form.
+        </p>
+        <form class="stack" method="post" action="/auth/magic/consume">
+          <input type="hidden" name="token" value={props.token} />
+          <Csrf token={props.csrf} />
+          <button class="btn" type="submit">
+            Sign in
+          </button>
+        </form>
       </section>
     </Layout>
   );

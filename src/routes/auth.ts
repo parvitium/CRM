@@ -1,10 +1,19 @@
 import { Hono } from "hono";
-import { consumeMagicLink, issueMagicLink } from "../auth/magic-link";
+import {
+  clearMagicCsrfCookie,
+  consumeMagicLink,
+  createMagicCsrf,
+  issueMagicLink,
+  magicCsrfCookie,
+  peekMagicLink,
+  readMagicCsrf,
+} from "../auth/magic-link";
+import { timingSafeEqual } from "../auth/crypto";
 import { createSession, sessionCookie } from "../auth/session";
 import type { AppEnv } from "../app-env";
 import { findUserByEmail, listKnownDevLogins } from "../db/queries";
 import { HttpError } from "../domain/http";
-import { LoginPage } from "../views/login";
+import { LoginPage, MagicConfirmPage } from "../views/login";
 import { signOut } from "../middleware/auth";
 
 export const authRoutes = new Hono<AppEnv>();
@@ -41,12 +50,30 @@ authRoutes.post("/auth/magic", async (c) => {
 
 authRoutes.get("/auth/magic", async (c) => {
   const token = c.req.query("token") ?? "";
+  if ((await peekMagicLink(c.env.DB, token)) !== "ok") {
+    return c.redirect("/login?error=That+link+is+invalid+or+expired");
+  }
+  const csrf = createMagicCsrf();
+  c.header("Set-Cookie", magicCsrfCookie(csrf, c.req.url));
+  return c.html(MagicConfirmPage({ token, csrf }));
+});
+
+authRoutes.post("/auth/magic/consume", async (c) => {
+  const form = await c.req.parseBody();
+  const token = typeof form.token === "string" ? form.token : "";
+  const csrf = typeof form.csrf === "string" ? form.csrf : "";
+  const cookieCsrf = readMagicCsrf(c.req.header("Cookie") ?? null);
+  if (!cookieCsrf || !timingSafeEqual(csrf, cookieCsrf)) {
+    throw new HttpError(403, "Invalid CSRF token");
+  }
   const userId = await consumeMagicLink(c.env.DB, token);
   if (!userId) {
+    c.header("Set-Cookie", clearMagicCsrfCookie(c.req.url));
     return c.redirect("/login?error=That+link+is+invalid+or+expired");
   }
   const created = await createSession(c.env.DB, userId);
   c.header("Set-Cookie", sessionCookie(created.rawToken, c.req.url));
+  c.header("Set-Cookie", clearMagicCsrfCookie(c.req.url), { append: true });
   const user = await c.env.DB.prepare("SELECT role FROM users WHERE id = ?")
     .bind(userId)
     .first<{ role: string }>();

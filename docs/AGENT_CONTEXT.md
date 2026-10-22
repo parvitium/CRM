@@ -25,10 +25,10 @@ Handwritten spec (transcribed) lives in the original issue. Scope is the foundat
 - Roles: `admin` | `customer`. Customer users must have `customer_id`. Admins must not.
 - Portal data loads with `requirePortalCustomer(actor)` and `actor.customerId`. Never authorize with a customer id from the URL.
 - Sessions: store `sha256(token)` only. Cookie `pv_session`, HttpOnly, SameSite=Lax, Secure on HTTPS.
-- Magic links: hashed, 15 minutes, single use, same response for unknown emails.
-- Cloudflare Access: `Cf-Access-Authenticated-User-Email`. Map to `users.email`.
+- Magic links: hashed, 15 minutes, single use, GET confirm + POST consume with CSRF, same response for unknown emails. Never log the raw token.
+- Cloudflare Access: honor only when `AUTH_MODE=access` and `Cf-Access-Jwt-Assertion` verifies against the team JWKS (`CF_ACCESS_TEAM_DOMAIN` + `CF_ACCESS_AUD`). Ignore `Cf-Access-Authenticated-User-Email` otherwise. `/health` never mints a session.
 - `ALLOW_DEV_LOGIN=true` is local/test only. Production vars leave it empty.
-- CSRF on authenticated POSTs.
+- CSRF on authenticated POSTs and on magic-link consume.
 
 ## Social credentials (non-negotiable)
 
@@ -50,7 +50,7 @@ Application helpers: `src/domain/social.ts`. Tests fail if a password-like colum
 
 Types: `dev`, `task`.  
 Stages: `backlog` → `ready` → `in-dev` → `in-qa` → `needs-adam` → `closed`.  
-QA is separate: only valid in `in-qa`. Fail → `in-dev`. Pass → `needs-adam`. History rows are append-only.
+QA is separate: a ticket can leave `in-qa` only through `/qa`. Fail → `in-dev`. Pass → `needs-adam`. Both paths set `qa_by` / `qa_result` / `qa_date`. History rows are append-only.
 
 Logic lives in `src/domain/tickets.ts` so HTTP handlers stay thin.
 

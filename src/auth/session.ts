@@ -15,7 +15,8 @@ export type SessionRow = {
 export async function createSession(
   db: D1Database,
   userId: string,
-): Promise<{ rawToken: string; csrfToken: string; expiresAt: string }> {
+): Promise<{ rawToken: string; csrfToken: string; expiresAt: string; sessionId: string }> {
+  const sessionId = crypto.randomUUID();
   const rawToken = randomToken();
   const tokenHash = await sha256Hex(rawToken);
   const csrfToken = randomToken();
@@ -25,9 +26,9 @@ export async function createSession(
       `INSERT INTO sessions (id, user_id, token_hash, csrf_token, expires_at, created_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
     )
-    .bind(crypto.randomUUID(), userId, tokenHash, csrfToken, expiresAt, nowIso())
+    .bind(sessionId, userId, tokenHash, csrfToken, expiresAt, nowIso())
     .run();
-  return { rawToken, csrfToken, expiresAt };
+  return { rawToken, csrfToken, expiresAt, sessionId };
 }
 
 export async function loadActorFromCookie(
