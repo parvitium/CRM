@@ -1,4 +1,5 @@
 import type { Actor } from "../domain/authz";
+import { AuthzError } from "../domain/authz";
 
 /** Spoofable on any path that is not actually fronted by Access. Never treat as login. */
 export const ACCESS_EMAIL_HEADER = "Cf-Access-Authenticated-User-Email";
@@ -66,23 +67,31 @@ export function isAccessAuthMode(mode: string | undefined): boolean {
   return String(mode ?? "").trim().toLowerCase() === "access";
 }
 
+/** Production Access identity is used only when mode, team domain, and AUD are all set. */
+export function isAccessConfigured(env: AccessBindings): boolean {
+  if (!isAccessAuthMode(env.AUTH_MODE)) {
+    return false;
+  }
+  const teamDomain = String(env.CF_ACCESS_TEAM_DOMAIN ?? "").trim();
+  const aud = String(env.CF_ACCESS_AUD ?? "").trim();
+  return Boolean(teamDomain && aud);
+}
+
 /**
- * Map a Cloudflare Access JWT to a CRM user.
- * The email header is ignored. Identity comes only from a verified JWT when AUTH_MODE=access.
+ * Map a Cloudflare Access JWT to an admin CRM user.
+ * The email header is ignored. Identity comes only from a verified JWT.
+ * A verified JWT whose email is not an admin is 403, not a silent miss.
  */
 export async function loadActorFromAccess(
   db: D1Database,
   request: Request,
   env: AccessBindings,
 ): Promise<Actor | null> {
-  if (!isAccessAuthMode(env.AUTH_MODE)) {
+  if (!isAccessConfigured(env)) {
     return null;
   }
   const teamDomain = String(env.CF_ACCESS_TEAM_DOMAIN ?? "").trim();
   const aud = String(env.CF_ACCESS_AUD ?? "").trim();
-  if (!teamDomain || !aud) {
-    return null;
-  }
   const jwt = request.headers.get(ACCESS_JWT_HEADER)?.trim();
   if (!jwt) {
     return null;
@@ -92,24 +101,22 @@ export async function loadActorFromAccess(
     return null;
   }
   const row = await db
-    .prepare("SELECT id, email, display_name, role, customer_id FROM users WHERE email = ?")
+    .prepare("SELECT id, email, display_name, role FROM users WHERE email = ? AND role = 'admin'")
     .bind(identity.email)
     .first<{
       id: string;
       email: string;
       display_name: string;
       role: Actor["role"];
-      customer_id: string | null;
     }>();
   if (!row) {
-    return null;
+    throw new AuthzError(403, "This Access identity is not an admin on this CRM");
   }
   return {
     id: row.id,
     email: row.email,
     displayName: row.display_name,
     role: row.role,
-    customerId: row.customer_id,
   };
 }
 

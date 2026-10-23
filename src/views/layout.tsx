@@ -3,65 +3,38 @@ import type { Child } from "hono/jsx";
 
 type NavItem = { href: string; label: string };
 
-function navFor(actor: Actor | null): NavItem[] {
-  if (!actor) {
-    return [];
-  }
-  if (actor.role === "admin") {
-    return [
-      { href: "/admin", label: "Dashboard" },
-      { href: "/admin/customers", label: "Customers" },
-      { href: "/admin/flags", label: "Flags" },
-      { href: "/admin/tickets", label: "Tickets" },
-      { href: "/admin/history", label: "Dev history" },
-      { href: "/admin/templates", label: "Templates" },
-    ];
-  }
-  return [
-    { href: "/portal", label: "Home" },
-    { href: "/portal/package", label: "Package" },
-    { href: "/portal/site", label: "Website" },
-    { href: "/portal/social", label: "Social" },
-    { href: "/portal/gbp", label: "Google" },
-    { href: "/portal/seo", label: "SEO" },
-    { href: "/portal/calls", label: "Calls" },
-    { href: "/portal/reviews", label: "Reviews" },
-    { href: "/portal/messages", label: "Messages" },
-  ];
-}
+const ADMIN_NAV: NavItem[] = [
+  { href: "/admin", label: "Dashboard" },
+  { href: "/admin/customers", label: "Customers" },
+  { href: "/admin/flags", label: "Flags" },
+  { href: "/admin/tickets", label: "Tickets" },
+  { href: "/admin/history", label: "Dev history" },
+  { href: "/admin/templates", label: "Templates" },
+];
 
 export function Layout(props: {
   title: string;
   actor: Actor | null;
   path: string;
   csrf?: string;
-  referrerPolicy?: "no-referrer";
   notice?: string | null;
   error?: string | null;
   children: Child;
 }) {
-  const items = navFor(props.actor);
-  const home = props.actor?.role === "customer" ? "/portal" : "/admin";
+  const items = props.actor ? ADMIN_NAV : [];
   return (
     <html lang="en">
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        {props.referrerPolicy === "no-referrer" ? (
-          <meta name="referrer" content="no-referrer" />
-        ) : null}
         <title>{props.title} · Parvitium CRM</title>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="icon" href="/favicon.ico" sizes="any" />
-        <link
-          rel="stylesheet"
-          href="/styles.css"
-          {...(props.referrerPolicy === "no-referrer" ? { referrerpolicy: "no-referrer" } : {})}
-        />
+        <link rel="stylesheet" href="/styles.css" />
       </head>
       <body>
         <header class="top">
-          <a class="mark" href={props.actor ? home : "/login"}>
+          <a class="mark" href={props.actor ? "/admin" : "/login"}>
             <span class="mark-kicker">Parvitium</span>
             <span class="mark-name">CRM</span>
           </a>
@@ -82,7 +55,7 @@ export function Layout(props: {
               <>
                 <span>
                   {props.actor.displayName}
-                  <small>{props.actor.role}</small>
+                  <small>admin</small>
                 </span>
                 <form method="post" action="/logout">
                   <Csrf token={props.csrf ?? ""} />

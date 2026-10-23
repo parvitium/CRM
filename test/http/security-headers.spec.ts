@@ -53,12 +53,9 @@ describe("security headers", () => {
     expectCommonSecurityHeaders(missing);
   });
 
-  it("sets no-referrer on the magic-link confirm flow", async () => {
-    const res = await workerFetch("https://crm.test/auth/magic?token=deadbeef", {
-      redirect: "manual",
-    });
-    expect(res.headers.get("Referrer-Policy")).toBe("no-referrer");
-    expectCommonSecurityHeaders(res, "no-referrer");
+  it("uses the default referrer policy on HTML pages", async () => {
+    const res = await workerFetch("https://crm.test/login", { redirect: "manual" });
+    expectCommonSecurityHeaders(res);
   });
 
   it("keeps headers on authenticated pages", async () => {

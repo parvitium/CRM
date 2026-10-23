@@ -2,8 +2,8 @@
 # Dev login is local-only. Production must omit ALLOW_DEV_LOGIN.
 ALLOW_DEV_LOGIN=true
 
-# AUTH_MODE is "magic" in wrangler.jsonc. Access identity is ignored unless
-# AUTH_MODE=access and CF_ACCESS_TEAM_DOMAIN + CF_ACCESS_AUD are set.
-# AUTH_MODE=magic
-# CF_ACCESS_TEAM_DOMAIN=
+# Production auth is Cloudflare Access. Leave these empty locally unless you
+# are testing JWT verification against a real team JWKS.
+# AUTH_MODE=access
+# CF_ACCESS_TEAM_DOMAIN=https://<team>.cloudflareaccess.com
 # CF_ACCESS_AUD=

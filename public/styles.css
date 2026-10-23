@@ -129,6 +129,25 @@ h2 {
   color: var(--muted);
 }
 
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin: 0 0 1rem;
+}
+
+.filters a {
+  text-decoration: none;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.filters a.on,
+.filters a:hover {
+  color: var(--ink);
+  font-weight: 600;
+}
+
 .panel,
 .card,
 .stat {

@@ -11,7 +11,7 @@ import {
   dashboardCounts,
   getCustomer,
   getGbp,
-  getSubscriptionForCustomer,
+  listSubscriptionsForCustomer,
   getTicket,
   listCalls,
   callStats,
@@ -70,8 +70,9 @@ adminRoutes.get("/", async (c) => {
 
 adminRoutes.get("/customers", async (c) => {
   const actor = requireAdmin(c.get("actor"));
+  const kind = c.req.query("kind") ?? "";
   const [customers, packages] = await Promise.all([
-    listCustomers(c.env.DB),
+    listCustomers(c.env.DB, kind),
     listPackages(c.env.DB),
   ]);
   return c.html(
@@ -80,6 +81,7 @@ adminRoutes.get("/customers", async (c) => {
       path: "/admin/customers",
       csrf: c.get("csrfToken") ?? "",
       notice: noticeFromQuery(c).notice,
+      kind,
       customers: customers.results,
       packages: packages.results,
     }),
@@ -91,6 +93,7 @@ adminRoutes.post("/customers", async (c) => {
   let id: string;
   try {
     id = await createCustomer(c.env.DB, {
+      kind: form.kind ?? "",
       businessName: form.business_name ?? "",
       contactName: form.contact_name ?? "",
       contactEmail: form.contact_email ?? "",
@@ -111,9 +114,9 @@ adminRoutes.get("/customers/:id", async (c) => {
   if (!customer) {
     throw new HttpError(404, "Customer not found");
   }
-  const [subscription, payments, websites, social, gbp, seo, calls, stats, reviews, messages, tickets] =
+  const [subscriptions, payments, websites, social, gbp, seo, calls, stats, reviews, messages, tickets] =
     await Promise.all([
-      getSubscriptionForCustomer(c.env.DB, id),
+      listSubscriptionsForCustomer(c.env.DB, id),
       listPayments(c.env.DB, id),
       listWebsites(c.env.DB, id),
       listSocialAccounts(c.env.DB, id),
@@ -131,7 +134,7 @@ adminRoutes.get("/customers/:id", async (c) => {
       path: `/admin/customers/${id}`,
       csrf: c.get("csrfToken") ?? "",
       customer,
-      subscription,
+      subscriptions: subscriptions.results,
       payments: payments.results,
       websites: websites.results,
       social: social.results,

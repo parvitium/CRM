@@ -1,6 +1,6 @@
 -- Parvitium CRM foundation schema.
 -- Social credentials: NEVER store passwords or access tokens in this database.
--- social_accounts.secrets_manager_ref is a pointer only (1Password / vault URI).
+-- social_accounts.secrets_manager_ref is a 1Password pointer only (op://).
 
 CREATE TABLE packages (
   id TEXT PRIMARY KEY,
@@ -24,6 +24,7 @@ CREATE TABLE website_templates (
 
 CREATE TABLE customers (
   id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('parvitium', 'tooele_trades', 'both')),
   business_name TEXT NOT NULL,
   contact_name TEXT NOT NULL,
   contact_email TEXT NOT NULL,
@@ -37,17 +38,13 @@ CREATE TABLE customers (
   updated_at TEXT NOT NULL
 );
 
+-- Admin-only. Cloudflare Access maps a verified JWT email to a row here.
 CREATE TABLE users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,
   display_name TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('admin', 'customer')),
-  customer_id TEXT REFERENCES customers(id),
-  created_at TEXT NOT NULL,
-  CHECK (
-    (role = 'admin' AND customer_id IS NULL)
-    OR (role = 'customer' AND customer_id IS NOT NULL)
-  )
+  role TEXT NOT NULL CHECK (role = 'admin'),
+  created_at TEXT NOT NULL
 );
 
 CREATE TABLE sessions (
@@ -56,15 +53,6 @@ CREATE TABLE sessions (
   token_hash TEXT NOT NULL UNIQUE,
   csrf_token TEXT NOT NULL,
   expires_at TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
-
-CREATE TABLE magic_links (
-  id TEXT PRIMARY KEY,
-  email TEXT NOT NULL,
-  token_hash TEXT NOT NULL UNIQUE,
-  expires_at TEXT NOT NULL,
-  used_at TEXT,
   created_at TEXT NOT NULL
 );
 
@@ -86,7 +74,8 @@ CREATE TABLE subscriptions (
   stripe_payment_link_id TEXT,
   current_period_end TEXT,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  UNIQUE (customer_id, package_id)
 );
 
 CREATE TABLE payments (
@@ -123,12 +112,10 @@ CREATE TABLE social_accounts (
   owner_email TEXT,
   last_verified_at TEXT,
   -- Pointer only. Example: op://Parvitium/summit-ridge-facebook
-  -- Never a password, cookie, or OAuth token.
+  -- Never a password, cookie, or OAuth token. 1Password only.
   secrets_manager_ref TEXT CHECK (
     secrets_manager_ref IS NULL
     OR secrets_manager_ref LIKE 'op://%'
-    OR secrets_manager_ref LIKE 'vault://%'
-    OR secrets_manager_ref LIKE 'aws-secrets://%'
   ),
   notes TEXT,
   UNIQUE (customer_id, platform)
@@ -252,7 +239,7 @@ CREATE TABLE ticket_history (
   created_at TEXT NOT NULL
 );
 
-CREATE INDEX idx_users_customer ON users(customer_id);
+CREATE INDEX idx_customers_kind ON customers(kind, business_name);
 CREATE INDEX idx_sessions_user ON sessions(user_id);
 CREATE INDEX idx_sessions_expires ON sessions(expires_at);
 CREATE INDEX idx_subscriptions_customer ON subscriptions(customer_id);

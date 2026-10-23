@@ -6,7 +6,6 @@ import { mutableResponse, securityHeaders } from "./middleware/security";
 import { adminRoutes } from "./routes/admin";
 import { apiRoutes } from "./routes/api";
 import { authRoutes } from "./routes/auth";
-import { portalRoutes } from "./routes/portal";
 
 export function createApp() {
   const app = new Hono<AppEnv>();
@@ -25,7 +24,6 @@ export function createApp() {
 
   app.route("/", authRoutes);
   app.route("/admin", adminRoutes);
-  app.route("/portal", portalRoutes);
   app.route("/api", apiRoutes);
 
   app.get("/", (c) => {
@@ -33,7 +31,7 @@ export function createApp() {
     if (!actor) {
       return c.redirect("/login");
     }
-    return c.redirect(actor.role === "admin" ? "/admin" : "/portal");
+    return c.redirect("/admin");
   });
 
   app.notFound(async (c) => {

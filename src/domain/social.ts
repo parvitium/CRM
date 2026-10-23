@@ -10,7 +10,7 @@ export const ACCESS_STATUSES = [
 ] as const;
 export type AccessStatus = (typeof ACCESS_STATUSES)[number];
 
-const REF_PREFIXES = ["op://", "vault://", "aws-secrets://"] as const;
+const REF_PREFIX = "op://";
 
 const FORBIDDEN_KEYS = [
   "password",
@@ -27,14 +27,12 @@ export function isAllowedSecretsRef(value: string | null | undefined): boolean {
   if (value === null || value === undefined || value === "") {
     return true;
   }
-  return REF_PREFIXES.some((prefix) => value.startsWith(prefix));
+  return value.startsWith(REF_PREFIX) && value.length > REF_PREFIX.length;
 }
 
 export function assertAllowedSecretsRef(value: string | null | undefined): void {
   if (!isAllowedSecretsRef(value)) {
-    throw new Error(
-      "secrets_manager_ref must be a vault pointer (op://, vault://, or aws-secrets://)",
-    );
+    throw new Error("secrets_manager_ref must be a 1Password pointer (op://Vault/item)");
   }
 }
 

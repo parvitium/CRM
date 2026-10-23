@@ -8,6 +8,7 @@ import {
   setAccessJwksFetcher,
   verifyAccessJwt,
 } from "../../src/auth/access";
+import { AuthzError } from "../../src/domain/authz";
 import { EMAILS } from "../../src/ids";
 import { seedSql } from "../helpers";
 import {
@@ -72,7 +73,7 @@ describe("Cloudflare Access JWT", () => {
     expect(actor).toBeNull();
   });
 
-  it("ignores a valid JWT when AUTH_MODE=magic", async () => {
+  it("ignores a valid JWT when Access is not configured", async () => {
     const key = await generateAccessTestKey();
     const jwt = await signAccessJwt(key.privateKey, validAccessClaims(EMAILS.adam));
     setAccessJwksFetcher(async () => mockJwksResponse(key.publicJwk));
@@ -84,9 +85,24 @@ describe("Cloudflare Access JWT", () => {
           [ACCESS_JWT_HEADER]: jwt,
         },
       }),
-      { ...ACCESS_ENV, AUTH_MODE: "magic" },
+      { AUTH_MODE: "access", CF_ACCESS_TEAM_DOMAIN: "", CF_ACCESS_AUD: "" },
     );
     expect(actor).toBeNull();
+  });
+
+  it("throws 403 when the JWT email is not an admin user", async () => {
+    const key = await generateAccessTestKey();
+    const jwt = await signAccessJwt(key.privateKey, validAccessClaims("nobody@example.test"));
+    setAccessJwksFetcher(async () => mockJwksResponse(key.publicJwk));
+    await expect(
+      loadActorFromAccess(
+        env.DB,
+        new Request("https://crm.test/api/me", {
+          headers: { [ACCESS_JWT_HEADER]: jwt },
+        }),
+        ACCESS_ENV,
+      ),
+    ).rejects.toBeInstanceOf(AuthzError);
   });
 
   it("rejects a JWT with the wrong audience", async () => {

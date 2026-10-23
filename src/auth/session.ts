@@ -58,10 +58,10 @@ export async function loadActorFromCookie(
   const row = await db
     .prepare(
       `SELECT s.id AS session_id, s.csrf_token, s.expires_at,
-              u.id, u.email, u.display_name, u.role, u.customer_id
+              u.id, u.email, u.display_name, u.role
        FROM sessions s
        JOIN users u ON u.id = s.user_id
-       WHERE s.token_hash = ?`,
+       WHERE s.token_hash = ? AND u.role = 'admin'`,
     )
     .bind(tokenHash)
     .first<{
@@ -72,7 +72,6 @@ export async function loadActorFromCookie(
       email: string;
       display_name: string;
       role: Actor["role"];
-      customer_id: string | null;
     }>();
 
   if (!row) {
@@ -91,7 +90,6 @@ export async function loadActorFromCookie(
       email: row.email,
       displayName: row.display_name,
       role: row.role,
-      customerId: row.customer_id,
     },
   };
 }

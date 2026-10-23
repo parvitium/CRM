@@ -1,13 +1,15 @@
 /** Stable fictional IDs shared by seed.sql and tests. Not real customers. */
 
+import { requirePlanBySlug } from "./config/plans";
+
 export const PACKAGE_IDS = {
-  onePage: "11111111-0000-4000-8000-000000000001",
-  starter: "11111111-0000-4000-8000-000000000002",
-  jobPages: "11111111-0000-4000-8000-000000000003",
-  managedGrowth: "11111111-0000-4000-8000-000000000004",
-  ttPro: "11111111-0000-4000-8000-000000000011",
-  ttFeatured: "11111111-0000-4000-8000-000000000012",
-  ttManaged: "11111111-0000-4000-8000-000000000013",
+  onePage: requirePlanBySlug("parvitium-one-page").id,
+  starter: requirePlanBySlug("parvitium-starter").id,
+  jobPages: requirePlanBySlug("parvitium-job-pages").id,
+  ttFree: requirePlanBySlug("tt-free").id,
+  ttPro: requirePlanBySlug("tt-pro-listing").id,
+  ttFeatured: requirePlanBySlug("tt-featured-leads").id,
+  ttManaged: requirePlanBySlug("tt-managed-growth").id,
 } as const;
 
 export const TEMPLATE_IDS = {
@@ -21,20 +23,13 @@ export const CUSTOMER_IDS = {
   copper: "22222222-0000-4000-8000-000000000002",
   lakeview: "22222222-0000-4000-8000-000000000003",
   desert: "22222222-0000-4000-8000-000000000004",
+  wasatch: "22222222-0000-4000-8000-000000000005",
 } as const;
 
 export const USER_IDS = {
   adam: "33333333-0000-4000-8000-000000000001",
-  summitPortal: "33333333-0000-4000-8000-000000000101",
-  copperPortal: "33333333-0000-4000-8000-000000000102",
-  lakeviewPortal: "33333333-0000-4000-8000-000000000103",
-  desertPortal: "33333333-0000-4000-8000-000000000104",
 } as const;
 
 export const EMAILS = {
   adam: "adam@parvitium.example",
-  summit: "portal.summit@example.test",
-  copper: "portal.copper@example.test",
-  lakeview: "portal.lakeview@example.test",
-  desert: "portal.desert@example.test",
 } as const;

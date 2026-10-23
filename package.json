@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Parvitium LLC CRM — admin dashboard and customer portals",
+  "description": "Parvitium LLC CRM — admin-only dashboard behind Cloudflare Access",
   "scripts": {
     "dev": "wrangler dev",
     "typecheck": "tsc --noEmit",

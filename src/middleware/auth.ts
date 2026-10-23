@@ -1,6 +1,6 @@
 import { createMiddleware } from "hono/factory";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { loadActorFromAccess } from "../auth/access";
+import { isAccessConfigured, loadActorFromAccess } from "../auth/access";
 import {
   clearSessionCookies,
   createSession,
@@ -29,19 +29,26 @@ export const sessionMiddleware = createMiddleware<AppEnv>(async (c, next) => {
     return;
   }
 
+  const accessConfigured = isAccessConfigured(c.env);
   const accessActor = await loadActorFromAccess(c.env.DB, c.req.raw, c.env);
-  const cookieSession = await loadActorFromCookie(c.env.DB, c.req.header("Cookie") ?? null);
+  const cookieSession = accessConfigured
+    ? null
+    : await loadActorFromCookie(c.env.DB, c.req.header("Cookie") ?? null);
 
-  if (accessActor && !cookieSession) {
-    const created = await createSession(c.env.DB, accessActor.id);
-    c.header("Set-Cookie", sessionCookie(created.rawToken, c.req.url));
-    c.set("actor", accessActor);
-    c.set("csrfToken", created.csrfToken);
-    c.set("sessionId", created.sessionId);
-  } else if (cookieSession) {
-    if (accessActor && accessActor.id !== cookieSession.actor.id) {
-      throw new HttpError(403, "Access identity does not match session");
+  if (accessActor) {
+    const existing = await loadActorFromCookie(c.env.DB, c.req.header("Cookie") ?? null);
+    if (existing && existing.actor.id === accessActor.id) {
+      c.set("actor", accessActor);
+      c.set("csrfToken", existing.csrfToken);
+      c.set("sessionId", existing.sessionId);
+    } else {
+      const created = await createSession(c.env.DB, accessActor.id);
+      c.header("Set-Cookie", sessionCookie(created.rawToken, c.req.url));
+      c.set("actor", accessActor);
+      c.set("csrfToken", created.csrfToken);
+      c.set("sessionId", created.sessionId);
     }
+  } else if (cookieSession) {
     c.set("actor", cookieSession.actor);
     c.set("csrfToken", cookieSession.csrfToken);
     c.set("sessionId", cookieSession.sessionId);
@@ -59,11 +66,7 @@ export const csrfMiddleware = createMiddleware<AppEnv>(async (c, next) => {
     await next();
     return;
   }
-  if (
-    c.req.path === "/auth/magic" ||
-    c.req.path === "/auth/magic/consume" ||
-    c.req.path === "/auth/dev-login"
-  ) {
+  if (c.req.path === "/auth/dev-login") {
     await next();
     return;
   }

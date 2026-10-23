@@ -1,49 +1,47 @@
 -- Fictional seed data for local/dev only. No real people, emails, or phones.
--- Apply after migrations: npm run db:seed:local
+-- Package rows must match src/config/plans.ts. Apply after migrations: npm run db:seed:local
 
 INSERT INTO packages (id, product_line, name, slug, setup_price_cents, monthly_price_cents, description, sort_order) VALUES
-  ('11111111-0000-4000-8000-000000000001', 'parvitium', 'One-Page', 'parvitium-one-page', 79700, 3900, 'Single-page site plus hosting and light edits.', 10),
-  ('11111111-0000-4000-8000-000000000002', 'parvitium', 'Starter', 'parvitium-starter', 149700, 7900, 'PLACEHOLDER PRICE — confirm with Adam. Multi-page starter site.', 20),
-  ('11111111-0000-4000-8000-000000000003', 'parvitium', 'Job Pages', 'parvitium-job-pages', 249700, 12900, 'PLACEHOLDER PRICE — confirm with Adam. Service/job landing pages.', 30),
-  ('11111111-0000-4000-8000-000000000004', 'parvitium', 'Managed Growth', 'parvitium-managed-growth', 399700, 29900, 'PLACEHOLDER PRICE — confirm with Adam. Site plus ongoing marketing.', 40),
-  ('11111111-0000-4000-8000-000000000011', 'tooele_trades', 'Pro Listing', 'tt-pro-listing', 0, 2900, 'TooeleTrades.com directory listing.', 110),
-  ('11111111-0000-4000-8000-000000000012', 'tooele_trades', 'Featured + Leads', 'tt-featured-leads', 0, 7900, 'Featured directory placement plus lead routing.', 120),
-  ('11111111-0000-4000-8000-000000000013', 'tooele_trades', 'Managed Growth', 'tt-managed-growth', 0, 19900, 'Directory plus managed marketing.', 130);
+  ('11111111-0000-4000-8000-000000000001', 'parvitium', 'One-Page', 'parvitium-one-page', 79700, 3900, 'One page on your own domain. $797 setup + $39/mo website + hosting.', 10),
+  ('11111111-0000-4000-8000-000000000002', 'parvitium', 'Starter', 'parvitium-starter', 120000, 4900, '1–3 pages. $1,200 setup + $49/mo. Optional year-one plan: $600 deposit then $99/mo × 12.', 20),
+  ('11111111-0000-4000-8000-000000000003', 'parvitium', 'Job Pages', 'parvitium-job-pages', 240000, 9900, '5–7 pages. $2,400 setup + $99/mo. Optional year-one plan: $1,200 deposit then $199/mo × 12.', 30),
+  ('11111111-0000-4000-8000-000000000010', 'tooele_trades', 'Free listing', 'tt-free', 0, 0, 'Free TooeleTrades.com directory listing.', 100),
+  ('11111111-0000-4000-8000-000000000011', 'tooele_trades', 'Pro Listing', 'tt-pro-listing', 0, 2900, 'TooeleTrades Pro Listing. $29/mo, listed above free listings.', 110),
+  ('11111111-0000-4000-8000-000000000012', 'tooele_trades', 'Featured + Leads', 'tt-featured-leads', 0, 7900, 'Featured (Sponsored) directory placement plus lead routing. $79/mo.', 120),
+  ('11111111-0000-4000-8000-000000000013', 'tooele_trades', 'Managed Growth', 'tt-managed-growth', 0, 22900, 'Directory plus managed marketing. $229/mo.', 130);
 
 INSERT INTO website_templates (id, name, slug, description, preview_url, created_at) VALUES
   ('12121212-0000-4000-8000-000000000001', 'One-Pager Trade', 'one-pager-trade', 'Hero, services, service area, contact.', 'https://templates.parvitium.example/one-pager', '2026-01-10T00:00:00.000Z'),
   ('12121212-0000-4000-8000-000000000002', 'Trades Home', 'trades-home', 'Home, about, services, gallery, contact.', 'https://templates.parvitium.example/trades-home', '2026-01-10T00:00:00.000Z'),
   ('12121212-0000-4000-8000-000000000003', 'Job Pages', 'job-pages', 'Home plus per-job landing pages.', 'https://templates.parvitium.example/job-pages', '2026-02-01T00:00:00.000Z');
 
-INSERT INTO customers (id, business_name, contact_name, contact_email, phone, city, county, notes, external_crm_name, external_crm_url, created_at, updated_at) VALUES
-  ('22222222-0000-4000-8000-000000000001', 'Summit Ridge Roofing LLC', 'Jordan Hale', 'jordan@summitridge.example', '435-555-0101', 'Tooele', 'Tooele', 'Fictional roofer. Prefers morning calls.', 'Jobber', 'https://secure.getjobber.example/summit', '2026-03-01T16:00:00.000Z', '2026-10-01T16:00:00.000Z'),
-  ('22222222-0000-4000-8000-000000000002', 'Copper Peak Plumbing LLC', 'Riley Chen', 'riley@copperpeak.example', '435-555-0102', 'Grantsville', 'Tooele', 'Fictional plumber. Emergency after-hours line.', NULL, NULL, '2026-04-12T16:00:00.000Z', '2026-10-10T16:00:00.000Z'),
-  ('22222222-0000-4000-8000-000000000003', 'Lakeview Electric Co.', 'Sam Ortiz', 'sam@lakeviewelectric.example', '435-555-0103', 'Stansbury Park', 'Tooele', 'Fictional electrician. One-page site live.', NULL, NULL, '2026-05-20T16:00:00.000Z', '2026-09-15T16:00:00.000Z'),
-  ('22222222-0000-4000-8000-000000000004', 'Desert Sage Landscaping LLC', 'Morgan Ellis', 'morgan@desertsage.example', '435-555-0104', 'Tooele', 'Tooele', 'Fictional landscaper listed on TooeleTrades.', 'Housecall Pro', 'https://pro.housecallpro.example/desert', '2026-06-08T16:00:00.000Z', '2026-10-18T16:00:00.000Z');
+INSERT INTO customers (id, kind, business_name, contact_name, contact_email, phone, city, county, notes, external_crm_name, external_crm_url, created_at, updated_at) VALUES
+  ('22222222-0000-4000-8000-000000000001', 'both', 'Summit Ridge Roofing LLC', 'Jordan Hale', 'jordan@summitridge.example', '435-555-0101', 'Tooele', 'Tooele', 'Fictional roofer. Website client plus TooeleTrades Pro Listing.', 'Jobber', 'https://secure.getjobber.example/summit', '2026-03-01T16:00:00.000Z', '2026-10-01T16:00:00.000Z'),
+  ('22222222-0000-4000-8000-000000000002', 'parvitium', 'Copper Peak Plumbing LLC', 'Riley Chen', 'riley@copperpeak.example', '435-555-0102', 'Grantsville', 'Tooele', 'Fictional plumber. Emergency after-hours line.', NULL, NULL, '2026-04-12T16:00:00.000Z', '2026-10-10T16:00:00.000Z'),
+  ('22222222-0000-4000-8000-000000000003', 'parvitium', 'Lakeview Electric Co.', 'Sam Ortiz', 'sam@lakeviewelectric.example', '435-555-0103', 'Stansbury Park', 'Tooele', 'Fictional electrician. One-page site live.', NULL, NULL, '2026-05-20T16:00:00.000Z', '2026-09-15T16:00:00.000Z'),
+  ('22222222-0000-4000-8000-000000000004', 'tooele_trades', 'Desert Sage Landscaping LLC', 'Morgan Ellis', 'morgan@desertsage.example', '435-555-0104', 'Tooele', 'Tooele', 'Fictional landscaper listed on TooeleTrades.', 'Housecall Pro', 'https://pro.housecallpro.example/desert', '2026-06-08T16:00:00.000Z', '2026-10-18T16:00:00.000Z'),
+  ('22222222-0000-4000-8000-000000000005', 'tooele_trades', 'Wasatch Fence Co.', 'Alex Brooks', 'alex@wasatchfence.example', '435-555-0105', 'Erda', 'Tooele', 'Fictional fencer. Free directory listing.', NULL, NULL, '2026-07-02T16:00:00.000Z', '2026-10-02T16:00:00.000Z');
 
-INSERT INTO users (id, email, display_name, role, customer_id, created_at) VALUES
-  ('33333333-0000-4000-8000-000000000001', 'adam@parvitium.example', 'Adam Lundell', 'admin', NULL, '2026-01-01T00:00:00.000Z'),
-  ('33333333-0000-4000-8000-000000000101', 'portal.summit@example.test', 'Jordan Hale', 'customer', '22222222-0000-4000-8000-000000000001', '2026-03-02T00:00:00.000Z'),
-  ('33333333-0000-4000-8000-000000000102', 'portal.copper@example.test', 'Riley Chen', 'customer', '22222222-0000-4000-8000-000000000002', '2026-04-13T00:00:00.000Z'),
-  ('33333333-0000-4000-8000-000000000103', 'portal.lakeview@example.test', 'Sam Ortiz', 'customer', '22222222-0000-4000-8000-000000000003', '2026-05-21T00:00:00.000Z'),
-  ('33333333-0000-4000-8000-000000000104', 'portal.desert@example.test', 'Morgan Ellis', 'customer', '22222222-0000-4000-8000-000000000004', '2026-06-09T00:00:00.000Z');
+INSERT INTO users (id, email, display_name, role, created_at) VALUES
+  ('33333333-0000-4000-8000-000000000001', 'adam@parvitium.example', 'Adam Lundell', 'admin', '2026-01-01T00:00:00.000Z');
 
 INSERT INTO subscriptions (id, customer_id, package_id, status, stripe_customer_id, stripe_subscription_id, stripe_payment_link_id, current_period_end, created_at, updated_at) VALUES
   ('44444444-0000-4000-8000-000000000001', '22222222-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000002', 'active', 'cus_mock_summit', 'sub_mock_summit', 'plink_mock_summit', '2026-11-01T00:00:00.000Z', '2026-03-01T16:00:00.000Z', '2026-10-01T16:00:00.000Z'),
+  ('44444444-0000-4000-8000-000000000011', '22222222-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000011', 'active', 'cus_mock_summit', 'sub_mock_summit_tt', 'plink_mock_summit_tt', '2026-11-01T00:00:00.000Z', '2026-08-01T16:00:00.000Z', '2026-10-01T16:00:00.000Z'),
   ('44444444-0000-4000-8000-000000000002', '22222222-0000-4000-8000-000000000002', '11111111-0000-4000-8000-000000000003', 'past_due', 'cus_mock_copper', 'sub_mock_copper', 'plink_mock_copper', '2026-10-12T00:00:00.000Z', '2026-04-12T16:00:00.000Z', '2026-10-12T16:00:00.000Z'),
   ('44444444-0000-4000-8000-000000000003', '22222222-0000-4000-8000-000000000003', '11111111-0000-4000-8000-000000000001', 'active', 'cus_mock_lakeview', NULL, 'plink_mock_lakeview', '2026-11-20T00:00:00.000Z', '2026-05-20T16:00:00.000Z', '2026-09-20T16:00:00.000Z'),
-  ('44444444-0000-4000-8000-000000000004', '22222222-0000-4000-8000-000000000004', '11111111-0000-4000-8000-000000000012', 'active', 'cus_mock_desert', 'sub_mock_desert', 'plink_mock_desert', '2026-11-08T00:00:00.000Z', '2026-06-08T16:00:00.000Z', '2026-10-08T16:00:00.000Z');
+  ('44444444-0000-4000-8000-000000000004', '22222222-0000-4000-8000-000000000004', '11111111-0000-4000-8000-000000000012', 'active', 'cus_mock_desert', 'sub_mock_desert', 'plink_mock_desert', '2026-11-08T00:00:00.000Z', '2026-06-08T16:00:00.000Z', '2026-10-08T16:00:00.000Z'),
+  ('44444444-0000-4000-8000-000000000005', '22222222-0000-4000-8000-000000000005', '11111111-0000-4000-8000-000000000010', 'active', NULL, NULL, NULL, NULL, '2026-07-02T16:00:00.000Z', '2026-07-02T16:00:00.000Z');
 
 INSERT INTO payments (id, customer_id, subscription_id, stripe_payment_intent_id, amount_cents, currency, status, paid_at, created_at) VALUES
-  ('45454545-0000-4000-8000-000000000001', '22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000001', 'pi_mock_summit_setup', 149700, 'usd', 'paid', '2026-03-01T16:10:00.000Z', '2026-03-01T16:10:00.000Z'),
-  ('45454545-0000-4000-8000-000000000002', '22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000001', 'pi_mock_summit_oct', 7900, 'usd', 'paid', '2026-10-01T12:00:00.000Z', '2026-10-01T12:00:00.000Z'),
-  ('45454545-0000-4000-8000-000000000003', '22222222-0000-4000-8000-000000000002', '44444444-0000-4000-8000-000000000002', 'pi_mock_copper_oct', 12900, 'usd', 'failed', NULL, '2026-10-12T12:00:00.000Z');
+  ('45454545-0000-4000-8000-000000000001', '22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000001', 'pi_mock_summit_setup', 120000, 'usd', 'paid', '2026-03-01T16:10:00.000Z', '2026-03-01T16:10:00.000Z'),
+  ('45454545-0000-4000-8000-000000000002', '22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000001', 'pi_mock_summit_oct', 4900, 'usd', 'paid', '2026-10-01T12:00:00.000Z', '2026-10-01T12:00:00.000Z'),
+  ('45454545-0000-4000-8000-000000000003', '22222222-0000-4000-8000-000000000002', '44444444-0000-4000-8000-000000000002', 'pi_mock_copper_oct', 9900, 'usd', 'failed', NULL, '2026-10-12T12:00:00.000Z');
 
 INSERT INTO websites (id, customer_id, template_id, name, url, status, notes, created_at, updated_at) VALUES
   ('55555555-0000-4000-8000-000000000001', '22222222-0000-4000-8000-000000000001', '12121212-0000-4000-8000-000000000002', 'Summit Ridge Roofing', 'https://summitridge.example', 'live', 'Launched March 2026.', '2026-03-15T00:00:00.000Z', '2026-03-15T00:00:00.000Z'),
   ('55555555-0000-4000-8000-000000000002', '22222222-0000-4000-8000-000000000002', '12121212-0000-4000-8000-000000000003', 'Copper Peak Plumbing', 'https://copperpeak.example', 'in_progress', 'Job pages for drain, water heater, sewer.', '2026-04-20T00:00:00.000Z', '2026-10-14T00:00:00.000Z'),
-  ('55555555-0000-4000-8000-000000000003', '22222222-0000-4000-8000-000000000003', '12121212-0000-4000-8000-000000000001', 'Lakeview Electric', 'https://lakeviewelectric.example', 'live', 'One-page.', '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z'),
-  ('55555555-0000-4000-8000-000000000004', '22222222-0000-4000-8000-000000000004', NULL, 'TooeleTrades listing', 'https://tooeeletrades.example/desert-sage', 'live', 'Directory profile, not a full site.', '2026-06-08T00:00:00.000Z', '2026-06-08T00:00:00.000Z');
+  ('55555555-0000-4000-8000-000000000003', '22222222-0000-4000-8000-000000000003', '12121212-0000-4000-8000-000000000001', 'Lakeview Electric', 'https://lakeviewelectric.example', 'live', 'One-page.', '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z');
 
 INSERT INTO social_accounts (id, customer_id, platform, access_status, owner_email, last_verified_at, secrets_manager_ref, notes) VALUES
   ('66666666-0000-4000-8000-000000000001', '22222222-0000-4000-8000-000000000001', 'facebook', 'partner_granted', 'jordan@summitridge.example', '2026-09-01T00:00:00.000Z', 'op://Parvitium/summit-ridge-facebook', 'Meta Business Suite partner access.'),
@@ -76,7 +74,7 @@ INSERT INTO review_items (id, customer_id, source, author_name, rating, body, re
 
 INSERT INTO messages (id, customer_id, from_role, subject, body, created_at, is_flagged, flag_reason, flag_resolved_at) VALUES
   ('71717171-0000-4000-8000-000000000001', '22222222-0000-4000-8000-000000000002', 'customer', 'Card declined', 'Hey Adam — the card on file failed. Can you send a new Payment Link?', '2026-10-13T14:00:00.000Z', 1, 'Payment issue', NULL),
-  ('71717171-0000-4000-8000-000000000002', '22222222-0000-4000-8000-000000000001', 'admin', 'Review draft ready', 'Drafted a reply to the 3-star review. Please glance at it in the portal.', '2026-10-18T16:00:00.000Z', 0, NULL, NULL),
+  ('71717171-0000-4000-8000-000000000002', '22222222-0000-4000-8000-000000000001', 'admin', 'Review draft ready', 'Drafted a reply to the 3-star review.', '2026-10-18T16:00:00.000Z', 0, NULL, NULL),
   ('71717171-0000-4000-8000-000000000003', '22222222-0000-4000-8000-000000000004', 'customer', 'Need more photos on listing', 'Can we add the backyard patio set to the TooeleTrades page?', '2026-10-19T17:00:00.000Z', 0, NULL, NULL);
 
 INSERT INTO flags (id, customer_id, message_id, kind, severity, title, detail, status, created_at, resolved_at) VALUES

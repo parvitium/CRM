@@ -1,4 +1,5 @@
 import { nowIso } from "../auth/crypto";
+import { isCustomerKind, type CustomerKind } from "../config/plans";
 import { assertAllowedSecretsRef } from "../domain/social";
 import {
   assertCanSubmitQa,
@@ -11,6 +12,7 @@ import {
 
 export type CustomerRow = {
   id: string;
+  kind: CustomerKind;
   business_name: string;
   contact_name: string;
   contact_email: string;
@@ -63,17 +65,25 @@ export type TicketRow = {
   customer_name: string | null;
 };
 
-export async function listCustomers(db: D1Database) {
+export async function listCustomers(db: D1Database, kind?: string) {
+  const filter =
+    kind === "parvitium"
+      ? "WHERE c.kind IN ('parvitium', 'both')"
+      : kind === "tooele_trades"
+        ? "WHERE c.kind IN ('tooele_trades', 'both')"
+        : "";
   return db
     .prepare(
       `SELECT c.*,
-              p.name AS package_name,
-              p.product_line,
-              s.status AS subscription_status,
+              GROUP_CONCAT(p.name, ' · ') AS package_name,
+              GROUP_CONCAT(p.product_line, ' · ') AS product_line,
+              GROUP_CONCAT(s.status, ' · ') AS subscription_status,
               (SELECT COUNT(*) FROM flags f WHERE f.customer_id = c.id AND f.status = 'open') AS open_flags
        FROM customers c
        LEFT JOIN subscriptions s ON s.customer_id = c.id
        LEFT JOIN packages p ON p.id = s.package_id
+       ${filter}
+       GROUP BY c.id
        ORDER BY c.business_name`,
     )
     .all<
@@ -93,6 +103,7 @@ export async function getCustomer(db: D1Database, id: string) {
 export async function createCustomer(
   db: D1Database,
   input: {
+    kind: string;
     businessName: string;
     contactName: string;
     contactEmail: string;
@@ -101,6 +112,9 @@ export async function createCustomer(
     packageId?: string;
   },
 ): Promise<string> {
+  if (!isCustomerKind(input.kind)) {
+    throw new Error("Kind must be Parvitium, TooeleTrades, or both");
+  }
   if (!input.businessName.trim() || !input.contactName.trim() || !input.contactEmail.includes("@")) {
     throw new Error("Business name, contact name, and a valid email are required");
   }
@@ -108,11 +122,12 @@ export async function createCustomer(
   const ts = nowIso();
   await db
     .prepare(
-      `INSERT INTO customers (id, business_name, contact_name, contact_email, phone, city, county, notes, external_crm_name, external_crm_url, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'Tooele', NULL, NULL, NULL, ?, ?)`,
+      `INSERT INTO customers (id, kind, business_name, contact_name, contact_email, phone, city, county, notes, external_crm_name, external_crm_url, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'Tooele', NULL, NULL, NULL, ?, ?)`,
     )
     .bind(
       id,
+      input.kind,
       input.businessName,
       input.contactName,
       input.contactEmail.toLowerCase(),
@@ -135,24 +150,25 @@ export async function createCustomer(
   return id;
 }
 
-export async function getSubscriptionForCustomer(db: D1Database, customerId: string) {
+export type SubscriptionWithPlan = SubscriptionRow & {
+  package_name: string;
+  product_line: string;
+  setup_price_cents: number;
+  monthly_price_cents: number;
+  package_description: string | null;
+};
+
+export async function listSubscriptionsForCustomer(db: D1Database, customerId: string) {
   return db
     .prepare(
       `SELECT s.*, p.name AS package_name, p.product_line, p.setup_price_cents, p.monthly_price_cents, p.description AS package_description
        FROM subscriptions s
        JOIN packages p ON p.id = s.package_id
-       WHERE s.customer_id = ?`,
+       WHERE s.customer_id = ?
+       ORDER BY p.sort_order`,
     )
     .bind(customerId)
-    .first<
-      SubscriptionRow & {
-        package_name: string;
-        product_line: string;
-        setup_price_cents: number;
-        monthly_price_cents: number;
-        package_description: string | null;
-      }
-    >();
+    .all<SubscriptionWithPlan>();
 }
 
 export async function listPayments(db: D1Database, customerId: string) {
@@ -200,30 +216,6 @@ export async function listSocialAccounts(db: D1Database, customerId: string) {
       owner_email: string | null;
       last_verified_at: string | null;
       secrets_manager_ref: string | null;
-      notes: string | null;
-    }>();
-}
-
-/** Portal-only: never select vault pointers. Admin uses listSocialAccounts. */
-export const PORTAL_SOCIAL_COLUMNS =
-  "id, customer_id, platform, access_status, owner_email, last_verified_at, notes";
-
-export async function listPortalSocialAccounts(db: D1Database, customerId: string) {
-  return db
-    .prepare(
-      `SELECT ${PORTAL_SOCIAL_COLUMNS}
-       FROM social_accounts
-       WHERE customer_id = ?
-       ORDER BY platform`,
-    )
-    .bind(customerId)
-    .all<{
-      id: string;
-      customer_id: string;
-      platform: string;
-      access_status: string;
-      owner_email: string | null;
-      last_verified_at: string | null;
       notes: string | null;
     }>();
 }
@@ -569,6 +561,12 @@ export async function listDevHistory(db: D1Database) {
 
 export async function dashboardCounts(db: D1Database) {
   const customers = await db.prepare("SELECT COUNT(*) AS n FROM customers").first<{ n: number }>();
+  const parvitium = await db
+    .prepare("SELECT COUNT(*) AS n FROM customers WHERE kind IN ('parvitium', 'both')")
+    .first<{ n: number }>();
+  const listings = await db
+    .prepare("SELECT COUNT(*) AS n FROM customers WHERE kind IN ('tooele_trades', 'both')")
+    .first<{ n: number }>();
   const flags = await db
     .prepare("SELECT COUNT(*) AS n FROM flags WHERE status = 'open'")
     .first<{ n: number }>();
@@ -580,6 +578,8 @@ export async function dashboardCounts(db: D1Database) {
     .first<{ n: number }>();
   return {
     customers: customers?.n ?? 0,
+    parvitium: parvitium?.n ?? 0,
+    listings: listings?.n ?? 0,
     openFlags: flags?.n ?? 0,
     openTickets: openTickets?.n ?? 0,
     pastDue: pastDue?.n ?? 0,
@@ -588,19 +588,18 @@ export async function dashboardCounts(db: D1Database) {
 
 export async function findUserByEmail(db: D1Database, email: string) {
   return db
-    .prepare("SELECT id, email, display_name, role, customer_id FROM users WHERE email = ?")
+    .prepare("SELECT id, email, display_name, role FROM users WHERE email = ? AND role = 'admin'")
     .bind(email.trim().toLowerCase())
     .first<{
       id: string;
       email: string;
       display_name: string;
-      role: "admin" | "customer";
-      customer_id: string | null;
+      role: "admin";
     }>();
 }
 
 export async function listKnownDevLogins(db: D1Database) {
   return db
-    .prepare("SELECT email, display_name, role FROM users ORDER BY role, display_name")
+    .prepare("SELECT email, display_name, role FROM users WHERE role = 'admin' ORDER BY display_name")
     .all<{ email: string; display_name: string; role: string }>();
 }

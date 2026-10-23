@@ -64,7 +64,7 @@ export interface ReviewAdapter {
 }
 
 export interface EmailAdapter {
-  sendMagicLink(email: string, url: string): Promise<void>;
+  send(input: { to: string; subject: string; body: string }): Promise<void>;
 }
 
 export type Adapters = {

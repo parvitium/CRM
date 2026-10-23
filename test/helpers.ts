@@ -68,7 +68,7 @@ export function workerFetch(input: string, init?: RequestInit): Promise<Response
   return exports.default.fetch(new Request(input, init));
 }
 
-/** Fetch through a fresh app with selected env overrides (e.g. AUTH_MODE=access). */
+/** Fetch through a fresh app with selected env overrides (e.g. Access team + AUD). */
 export function workerFetchWithEnv(
   input: string,
   init: RequestInit | undefined,
@@ -119,91 +119,6 @@ export function hiddenInput(html: string, name: string): string | null {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = html.match(new RegExp(`name="${escaped}" value="([^"]*)"`));
   return match?.[1] ?? null;
-}
-
-export async function issueMagicToken(email: string): Promise<string> {
-  await workerFetch("https://crm.test/auth/magic", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ email }).toString(),
-  });
-  const mailed = await env.DB.prepare(
-    "SELECT body FROM outbound_emails WHERE to_email = ? ORDER BY created_at DESC LIMIT 1",
-  )
-    .bind(email)
-    .first<{ body: string }>();
-  const match = mailed?.body.match(/https?:\/\/[^ ]+\/auth\/magic\?token=([a-f0-9]+)/);
-  if (!match?.[1]) {
-    throw new Error(`no magic token emailed to ${email}`);
-  }
-  return match[1];
-}
-
-export async function openMagicConfirm(token: string): Promise<{
-  status: number;
-  html: string;
-  csrf: string | null;
-  cookie: string | null;
-  setCookie: string | null;
-  location: string | null;
-  firstStatus: number;
-  firstLocation: string | null;
-  firstHeaders: Headers;
-}> {
-  const first = await workerFetch(`https://crm.test/auth/magic?token=${token}`, {
-    redirect: "manual",
-  });
-  const firstLocation = first.headers.get("Location");
-  const cookies = cookieHeaderFromResponse(first);
-  const stripTo = firstLocation ? new URL(firstLocation, "https://crm.test") : null;
-  if (
-    first.status === 303 &&
-    stripTo &&
-    stripTo.pathname === "/auth/magic" &&
-    !stripTo.searchParams.has("token")
-  ) {
-    const res = await workerFetch(stripTo.toString(), {
-      headers: cookies ? { Cookie: cookies } : {},
-      redirect: "manual",
-    });
-    const html = await res.text();
-    const merged = [cookies, cookieHeaderFromResponse(res)].filter(Boolean).join("; ");
-    return {
-      status: res.status,
-      html,
-      csrf: hiddenInput(html, "csrf"),
-      cookie: merged || null,
-      setCookie: [...getSetCookies(first), ...getSetCookies(res)].join(", "),
-      location: res.headers.get("Location"),
-      firstStatus: first.status,
-      firstLocation,
-      firstHeaders: first.headers,
-    };
-  }
-  const html = await first.text();
-  return {
-    status: first.status,
-    html,
-    csrf: hiddenInput(html, "csrf"),
-    cookie: cookies || null,
-    setCookie: first.headers.get("Set-Cookie"),
-    location: firstLocation,
-    firstStatus: first.status,
-    firstLocation,
-    firstHeaders: first.headers,
-  };
-}
-
-export function consumeMagic(csrf: string, cookie: string): Promise<Response> {
-  return workerFetch("https://crm.test/auth/magic/consume", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Cookie: cookie,
-    },
-    body: new URLSearchParams({ csrf }).toString(),
-    redirect: "manual",
-  });
 }
 
 export function getSetCookies(res: Response): string[] {

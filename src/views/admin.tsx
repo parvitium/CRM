@@ -2,6 +2,7 @@ import type { Actor } from "../domain/authz";
 import { allowedTransitions, TICKET_STAGES, type TicketStage } from "../domain/tickets";
 import { socialAccessLabel, type AccessStatus } from "../domain/social";
 import { Csrf, Empty, Layout } from "./layout";
+import { customerKindLabel } from "../config/plans";
 import { money, productLineLabel, when, whenTime } from "./format";
 
 export function AdminHome(props: {
@@ -9,7 +10,14 @@ export function AdminHome(props: {
   path: string;
   csrf: string;
   notice?: string;
-  counts: { customers: number; openFlags: number; openTickets: number; pastDue: number };
+  counts: {
+    customers: number;
+    parvitium: number;
+    listings: number;
+    openFlags: number;
+    openTickets: number;
+    pastDue: number;
+  };
   flags: Record<string, unknown>[];
 }) {
   return (
@@ -17,9 +25,13 @@ export function AdminHome(props: {
       <p class="kicker">Adam’s desk</p>
       <h1>Dashboard</h1>
       <div class="stats">
-        <a class="stat" href="/admin/customers">
-          <strong>{props.counts.customers}</strong>
-          <span>Customers</span>
+        <a class="stat" href="/admin/customers?kind=parvitium">
+          <strong>{props.counts.parvitium}</strong>
+          <span>Parvitium clients</span>
+        </a>
+        <a class="stat" href="/admin/customers?kind=tooele_trades">
+          <strong>{props.counts.listings}</strong>
+          <span>TooeleTrades listings</span>
         </a>
         <a class="stat" href="/admin/flags">
           <strong>{props.counts.openFlags}</strong>
@@ -57,18 +69,32 @@ export function CustomerListPage(props: {
   path: string;
   csrf: string;
   notice?: string;
+  kind: string;
   customers: Record<string, unknown>[];
-  packages: { id: string; name: string; product_line: string }[];
+  packages: { id: string; name: string; product_line: string; setup_price_cents: number; monthly_price_cents: number }[];
 }) {
   return (
     <Layout title="Customers" actor={props.actor} path={props.path} csrf={props.csrf} notice={props.notice}>
       <p class="kicker">Accounts</p>
       <h1>Customers</h1>
+      <p class="lede">Parvitium website clients and TooeleTrades directory listings.</p>
+      <p class="filters">
+        <a class={!props.kind ? "on" : ""} href="/admin/customers">
+          All
+        </a>
+        <a class={props.kind === "parvitium" ? "on" : ""} href="/admin/customers?kind=parvitium">
+          Parvitium
+        </a>
+        <a class={props.kind === "tooele_trades" ? "on" : ""} href="/admin/customers?kind=tooele_trades">
+          TooeleTrades
+        </a>
+      </p>
       <div class="split">
         <table class="table">
           <thead>
             <tr>
               <th>Business</th>
+              <th>Kind</th>
               <th>Package</th>
               <th>Status</th>
               <th>Flags</th>
@@ -81,10 +107,8 @@ export function CustomerListPage(props: {
                 <td>
                   <a href={`/admin/customers/${row.id}`}>{String(row.business_name)}</a>
                 </td>
-                <td>
-                  {productLineLabel(String(row.product_line ?? ""))}
-                  {row.package_name ? ` · ${String(row.package_name)}` : ""}
-                </td>
+                <td>{customerKindLabel(String(row.kind ?? ""))}</td>
+                <td>{row.package_name ? String(row.package_name) : "—"}</td>
                 <td>
                   <span class={`pill ${String(row.subscription_status ?? "none")}`}>
                     {String(row.subscription_status ?? "none")}
@@ -99,6 +123,14 @@ export function CustomerListPage(props: {
         <form class="panel stack" method="post" action="/admin/customers">
           <h2>Add customer</h2>
           <Csrf token={props.csrf} />
+          <label>
+            Kind
+            <select name="kind" required>
+              <option value="parvitium">Parvitium (website / visibility)</option>
+              <option value="tooele_trades">TooeleTrades listing</option>
+              <option value="both">Both</option>
+            </select>
+          </label>
           <label>
             Business
             <input name="business_name" required />
@@ -125,7 +157,8 @@ export function CustomerListPage(props: {
               <option value="">None yet</option>
               {props.packages.map((pkg) => (
                 <option value={pkg.id}>
-                  {productLineLabel(pkg.product_line)} · {pkg.name}
+                  {productLineLabel(pkg.product_line)} · {pkg.name} · {money(pkg.setup_price_cents)}{" "}
+                  + {money(pkg.monthly_price_cents)}/mo
                 </option>
               ))}
             </select>
@@ -144,7 +177,7 @@ export function CustomerDetailPage(props: {
   path: string;
   csrf: string;
   customer: Record<string, unknown>;
-  subscription: Record<string, unknown> | null;
+  subscriptions: Record<string, unknown>[];
   payments: Record<string, unknown>[];
   websites: Record<string, unknown>[];
   social: Record<string, unknown>[];
@@ -164,51 +197,50 @@ export function CustomerDetailPage(props: {
       </p>
       <h1>{String(c.business_name)}</h1>
       <p class="lede">
-        {String(c.contact_name)} · {String(c.contact_email)}
+        {customerKindLabel(String(c.kind))} · {String(c.contact_name)} · {String(c.contact_email)}
         {c.phone ? ` · ${String(c.phone)}` : ""}
         {c.city ? ` · ${String(c.city)}, ${String(c.county)}` : ""}
       </p>
 
       <div class="grid-2">
         <section class="panel">
-          <h2>Package</h2>
-          {props.subscription ? (
-            <dl class="meta">
-              <div>
-                <dt>Line / tier</dt>
-                <dd>
-                  {productLineLabel(String(props.subscription.product_line))} ·{" "}
-                  {String(props.subscription.package_name)}
-                </dd>
-              </div>
-              <div>
-                <dt>Price</dt>
-                <dd>
-                  {money(Number(props.subscription.setup_price_cents))} setup ·{" "}
-                  {money(Number(props.subscription.monthly_price_cents))}/mo
-                </dd>
-              </div>
-              <div>
-                <dt>Status</dt>
-                <dd>
-                  <span class={`pill ${String(props.subscription.status)}`}>
-                    {String(props.subscription.status)}
-                  </span>
-                </dd>
-              </div>
-              <div>
-                <dt>Stripe refs</dt>
-                <dd class="mono">
-                  {String(props.subscription.stripe_customer_id ?? "—")}
-                  <br />
-                  {String(props.subscription.stripe_subscription_id ?? "no sub")}
-                  <br />
-                  {String(props.subscription.stripe_payment_link_id ?? "no payment link")}
-                </dd>
-              </div>
-            </dl>
-          ) : (
+          <h2>Packages</h2>
+          {props.subscriptions.length === 0 ? (
             <Empty>No subscription on file.</Empty>
+          ) : (
+            props.subscriptions.map((sub) => (
+              <dl class="meta">
+                <div>
+                  <dt>Line / tier</dt>
+                  <dd>
+                    {productLineLabel(String(sub.product_line))} · {String(sub.package_name)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Price</dt>
+                  <dd>
+                    {money(Number(sub.setup_price_cents))} setup · {money(Number(sub.monthly_price_cents))}
+                    /mo
+                  </dd>
+                </div>
+                <div>
+                  <dt>Status</dt>
+                  <dd>
+                    <span class={`pill ${String(sub.status)}`}>{String(sub.status)}</span>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Stripe refs</dt>
+                  <dd class="mono">
+                    {String(sub.stripe_customer_id ?? "—")}
+                    <br />
+                    {String(sub.stripe_subscription_id ?? "no sub")}
+                    <br />
+                    {String(sub.stripe_payment_link_id ?? "no payment link")}
+                  </dd>
+                </div>
+              </dl>
+            ))
           )}
           {props.payments.length > 0 ? (
             <table class="table compact">
@@ -284,7 +316,8 @@ export function CustomerDetailPage(props: {
         <section class="panel">
           <h2>Social access</h2>
           <p class="hint">
-            Status and vault pointers only. Passwords are not stored here.
+            Status and optional 1Password <code>op://</code> pointer only. Never store social
+            passwords here.
           </p>
           {props.social.length === 0 ? (
             <Empty>No social accounts tracked.</Empty>
@@ -442,7 +475,7 @@ export function CustomerDetailPage(props: {
             <textarea name="body" required rows={3} />
           </label>
           <button class="btn" type="submit">
-            Send to portal
+            Log a note
           </button>
         </form>
         {props.messages.length === 0 ? (

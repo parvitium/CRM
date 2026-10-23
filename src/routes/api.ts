@@ -1,16 +1,14 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../app-env";
-import { requireAdmin, requirePortalCustomer, requireUser } from "../domain/authz";
+import { requireAdmin, requireUser } from "../domain/authz";
 import { HttpError } from "../domain/http";
 import { isQaResult, isTicketStage, isTicketType } from "../domain/tickets";
 import { readJson } from "../http/form";
 import {
   createTicket,
   getCustomer,
-  getSubscriptionForCustomer,
   getTicket,
   listCustomers,
-  listMessages,
   listOpenFlags,
   listTickets,
   submitQa,
@@ -26,14 +24,13 @@ apiRoutes.get("/me", (c) => {
     email: actor.email,
     displayName: actor.displayName,
     role: actor.role,
-    customerId: actor.customerId,
     csrf: c.get("csrfToken"),
   });
 });
 
 apiRoutes.get("/admin/customers", async (c) => {
   requireAdmin(c.get("actor"));
-  const customers = await listCustomers(c.env.DB);
+  const customers = await listCustomers(c.env.DB, c.req.query("kind"));
   return c.json({ customers: customers.results });
 });
 
@@ -127,28 +124,4 @@ apiRoutes.get("/admin/tickets/:id", async (c) => {
     throw new HttpError(404, "Ticket not found");
   }
   return c.json({ ticket });
-});
-
-apiRoutes.get("/portal/overview", async (c) => {
-  const actor = requirePortalCustomer(c.get("actor"));
-  const [customer, subscription, messages] = await Promise.all([
-    getCustomer(c.env.DB, actor.customerId),
-    getSubscriptionForCustomer(c.env.DB, actor.customerId),
-    listMessages(c.env.DB, actor.customerId),
-  ]);
-  return c.json({
-    customer,
-    subscription,
-    messages: messages.results,
-  });
-});
-
-/** Deliberately rejects any customer id in the URL. Portal is session-scoped. */
-apiRoutes.get("/portal/customers/:id", async (c) => {
-  const actor = requirePortalCustomer(c.get("actor"));
-  if (c.req.param("id") !== actor.customerId) {
-    throw new HttpError(403, "Cannot access another customer");
-  }
-  const customer = await getCustomer(c.env.DB, actor.customerId);
-  return c.json({ customer });
 });

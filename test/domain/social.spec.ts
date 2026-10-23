@@ -6,16 +6,18 @@ import {
 } from "../../src/domain/social";
 
 describe("social access model", () => {
-  it("allows vault pointers and empty refs", () => {
+  it("allows 1Password pointers and empty refs", () => {
     expect(isAllowedSecretsRef(null)).toBe(true);
+    expect(isAllowedSecretsRef("")).toBe(true);
     expect(isAllowedSecretsRef("op://Parvitium/summit-ridge-facebook")).toBe(true);
-    expect(isAllowedSecretsRef("vault://prod/gbp")).toBe(true);
   });
 
-  it("rejects anything that looks like a stored secret", () => {
+  it("rejects anything that is not an op:// pointer", () => {
+    expect(isAllowedSecretsRef("vault://prod/gbp")).toBe(false);
+    expect(isAllowedSecretsRef("aws-secrets://foo")).toBe(false);
+    expect(isAllowedSecretsRef("op://")).toBe(false);
     expect(isAllowedSecretsRef("hunter2")).toBe(false);
-    expect(isAllowedSecretsRef("password=secret")).toBe(false);
-    expect(() => assertAllowedSecretsRef("EAAG-not-a-pointer")).toThrow(/vault pointer/);
+    expect(() => assertAllowedSecretsRef("EAAG-not-a-pointer")).toThrow(/1Password pointer/);
   });
 
   it("treats password-like column names as forbidden", () => {

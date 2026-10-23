@@ -14,8 +14,8 @@ export const CONTENT_SECURITY_POLICY = [
 
 export const HSTS_VALUE = "max-age=31536000; includeSubDomains";
 
-export function referrerPolicyFor(path: string): string {
-  return path.startsWith("/auth/magic") ? "no-referrer" : "strict-origin-when-cross-origin";
+export function referrerPolicyFor(_path: string): string {
+  return "strict-origin-when-cross-origin";
 }
 
 export function applySecurityHeaders(headers: Headers, requestUrl: string, path: string): void {
