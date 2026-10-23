@@ -1,0 +1,297 @@
+import type { Actor } from "../domain/authz";
+import { AuthzError } from "../domain/authz";
+
+/** Spoofable on any path that is not actually fronted by Access. Never treat as login. */
+export const ACCESS_EMAIL_HEADER = "Cf-Access-Authenticated-User-Email";
+export const ACCESS_JWT_HEADER = "Cf-Access-Jwt-Assertion";
+
+export type AccessBindings = {
+  AUTH_MODE?: string;
+  ALLOW_DEV_LOGIN?: string;
+  CF_ACCESS_TEAM_DOMAIN?: string;
+  CF_ACCESS_AUD?: string;
+};
+
+export type AccessIdentity = { email: string };
+
+type JwtHeader = { alg?: string; kid?: string; typ?: string };
+type AccessJwtPayload = {
+  aud?: string | string[];
+  email?: string;
+  iss?: string;
+  exp?: number;
+  nbf?: number;
+  iat?: number;
+};
+
+type JwkRsa = JsonWebKey & { kid?: string; alg?: string; use?: string };
+type Jwks = { keys?: JwkRsa[] };
+
+type JwksFetcher = (url: string) => Promise<Response>;
+
+const CLOCK_SKEW_SECONDS = 60;
+const JWKS_TTL_MS = 60_000;
+
+const defaultJwksFetcher: JwksFetcher = (url) => fetch(url);
+
+let jwksFetcher: JwksFetcher = defaultJwksFetcher;
+const jwksCache = new Map<string, { fetchedAt: number; keys: JwkRsa[] }>();
+
+/** Test-only: stub JWKS HTTP so verification can run without a live Access team. */
+export function setAccessJwksFetcher(fetcher: JwksFetcher | null): void {
+  jwksFetcher = fetcher ?? defaultJwksFetcher;
+}
+
+export function resetAccessTestHooks(): void {
+  jwksFetcher = defaultJwksFetcher;
+  jwksCache.clear();
+}
+
+export function normalizeTeamDomain(raw: string): string {
+  let value = raw.trim().toLowerCase();
+  value = value.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  if (value && !value.includes(".")) {
+    value = `${value}.cloudflareaccess.com`;
+  }
+  return value;
+}
+
+export function accessJwksUrl(teamDomain: string): string {
+  return `https://${normalizeTeamDomain(teamDomain)}/cdn-cgi/access/certs`;
+}
+
+export function accessIssuer(teamDomain: string): string {
+  return `https://${normalizeTeamDomain(teamDomain)}`;
+}
+
+export function authMode(env: AccessBindings): string {
+  return String(env.AUTH_MODE ?? "").trim().toLowerCase();
+}
+
+export function isAccessAuthMode(mode: string | undefined): boolean {
+  return String(mode ?? "").trim().toLowerCase() === "access";
+}
+
+export function isDevAuthMode(env: AccessBindings): boolean {
+  return authMode(env) === "dev";
+}
+
+export function isLoopbackHost(requestUrl: string): boolean {
+  try {
+    const hostname = new URL(requestUrl).hostname.toLowerCase();
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
+  } catch {
+    return false;
+  }
+}
+
+/** Cookie /dev-login auth: AUTH_MODE=dev AND the request host is loopback. Never production. */
+export function isLocalDevAuth(env: AccessBindings, requestUrl: string): boolean {
+  return isDevAuthMode(env) && isLoopbackHost(requestUrl);
+}
+
+/** Local form login: AUTH_MODE=dev, loopback host, and ALLOW_DEV_LOGIN=true. */
+export function isDevLoginAllowed(env: AccessBindings, requestUrl: string): boolean {
+  return isLocalDevAuth(env, requestUrl) && String(env.ALLOW_DEV_LOGIN ?? "").trim() === "true";
+}
+
+export function accessAudience(env: AccessBindings): { teamDomain: string; aud: string } {
+  return {
+    teamDomain: String(env.CF_ACCESS_TEAM_DOMAIN ?? "").trim(),
+    aud: String(env.CF_ACCESS_AUD ?? "").trim(),
+  };
+}
+
+/** Team domain + AUD are both set. Does not imply the request is allowed to use cookies. */
+export function isAccessReady(env: AccessBindings): boolean {
+  const { teamDomain, aud } = accessAudience(env);
+  return Boolean(teamDomain && aud);
+}
+
+/** Access JWT is required unless this request is explicit local-dev. */
+export function mustUseAccess(env: AccessBindings, requestUrl: string): boolean {
+  return !isLocalDevAuth(env, requestUrl);
+}
+
+export function isAccessMisconfigured(env: AccessBindings, requestUrl: string): boolean {
+  return mustUseAccess(env, requestUrl) && !isAccessReady(env);
+}
+
+/** @deprecated Use isAccessReady + mustUseAccess. Kept for call sites that meant "JWT path is live". */
+export function isAccessConfigured(env: AccessBindings): boolean {
+  return isAccessAuthMode(env.AUTH_MODE) && isAccessReady(env);
+}
+
+/**
+ * Map a Cloudflare Access JWT to an admin CRM user.
+ * The email header is ignored. Identity comes only from a verified JWT.
+ * A verified JWT whose email is not an admin is 403, not a silent miss.
+ */
+export async function loadActorFromAccess(
+  db: D1Database,
+  request: Request,
+  env: AccessBindings,
+): Promise<Actor | null> {
+  if (!isAccessReady(env)) {
+    return null;
+  }
+  const { teamDomain, aud } = accessAudience(env);
+  const jwt = request.headers.get(ACCESS_JWT_HEADER)?.trim();
+  if (!jwt) {
+    return null;
+  }
+  const identity = await verifyAccessJwt(jwt, { teamDomain, aud });
+  if (!identity) {
+    return null;
+  }
+  const row = await db
+    .prepare("SELECT id, email, display_name, role FROM users WHERE email = ? AND role = 'admin'")
+    .bind(identity.email)
+    .first<{
+      id: string;
+      email: string;
+      display_name: string;
+      role: Actor["role"];
+    }>();
+  if (!row) {
+    throw new AuthzError(403, "This Access identity is not an admin on this CRM");
+  }
+  return {
+    id: row.id,
+    email: row.email,
+    displayName: row.display_name,
+    role: row.role,
+  };
+}
+
+export async function verifyAccessJwt(
+  jwt: string,
+  opts: { teamDomain: string; aud: string },
+): Promise<AccessIdentity | null> {
+  const parts = jwt.split(".");
+  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
+    return null;
+  }
+  const header = decodeBase64UrlJson<JwtHeader>(parts[0]);
+  const payload = decodeBase64UrlJson<AccessJwtPayload>(parts[1]);
+  if (!header || !payload) {
+    return null;
+  }
+  if (header.alg !== "RS256") {
+    return null;
+  }
+  const teamDomain = normalizeTeamDomain(opts.teamDomain);
+  if (!teamDomain || !opts.aud) {
+    return null;
+  }
+  if (payload.iss !== accessIssuer(teamDomain)) {
+    return null;
+  }
+  if (!audienceIncludes(payload.aud, opts.aud)) {
+    return null;
+  }
+  if (!payload.exp || !Number.isFinite(payload.exp)) {
+    return null;
+  }
+  const now = Math.floor(Date.now() / 1000);
+  if (payload.exp + CLOCK_SKEW_SECONDS <= now) {
+    return null;
+  }
+  if (payload.nbf !== undefined && payload.nbf - CLOCK_SKEW_SECONDS > now) {
+    return null;
+  }
+  const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "";
+  if (!email.includes("@")) {
+    return null;
+  }
+
+  const keys = await loadJwks(accessJwksUrl(teamDomain));
+  if (!keys) {
+    return null;
+  }
+  const candidates = keys.filter((key) => {
+    if (key.kty !== "RSA" || !key.n || !key.e) {
+      return false;
+    }
+    if (header.kid && key.kid && key.kid !== header.kid) {
+      return false;
+    }
+    return true;
+  });
+  const signedData = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
+  const signature = base64UrlToBytes(parts[2]);
+  if (!signature) {
+    return null;
+  }
+  for (const jwk of candidates) {
+    try {
+      const key = await crypto.subtle.importKey(
+        "jwk",
+        { kty: "RSA", n: jwk.n, e: jwk.e, alg: "RS256", ext: true },
+        { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+        false,
+        ["verify"],
+      );
+      const ok = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, signature, signedData);
+      if (ok) {
+        return { email };
+      }
+    } catch {
+      // try the next JWKS key
+    }
+  }
+  return null;
+}
+
+function audienceIncludes(aud: string | string[] | undefined, expected: string): boolean {
+  if (typeof aud === "string") {
+    return aud === expected;
+  }
+  return Array.isArray(aud) && aud.includes(expected);
+}
+
+async function loadJwks(url: string): Promise<JwkRsa[] | null> {
+  const cached = jwksCache.get(url);
+  if (cached && Date.now() - cached.fetchedAt < JWKS_TTL_MS) {
+    return cached.keys;
+  }
+  try {
+    const res = await jwksFetcher(url);
+    if (!res.ok) {
+      return null;
+    }
+    const body = (await res.json()) as Jwks;
+    const keys = Array.isArray(body.keys) ? body.keys : [];
+    jwksCache.set(url, { fetchedAt: Date.now(), keys });
+    return keys;
+  } catch {
+    return null;
+  }
+}
+
+function decodeBase64UrlJson<T>(part: string): T | null {
+  const bytes = base64UrlToBytes(part);
+  if (!bytes) {
+    return null;
+  }
+  try {
+    return JSON.parse(new TextDecoder().decode(bytes)) as T;
+  } catch {
+    return null;
+  }
+}
+
+function base64UrlToBytes(value: string): Uint8Array | null {
+  try {
+    const pad = "=".repeat((4 - (value.length % 4)) % 4);
+    const b64 = value.replace(/-/g, "+").replace(/_/g, "/") + pad;
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) {
+      out[i] = bin.charCodeAt(i);
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}

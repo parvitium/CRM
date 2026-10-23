@@ -1,0 +1,27 @@
+{
+  "name": "parvitium-crm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Parvitium LLC CRM — admin-only dashboard behind Cloudflare Access",
+  "scripts": {
+    "dev": "wrangler dev",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "cf-typegen": "wrangler types",
+    "db:migrate:local": "wrangler d1 migrations apply parvitium-crm --local",
+    "db:seed:local": "wrangler d1 execute parvitium-crm --local --file=./seed/seed.sql",
+    "dry-run": "wrangler deploy --dry-run --outdir=dist"
+  },
+  "dependencies": {
+    "hono": "^4.10.3"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.4.6",
+    "@types/node": "^22.18.11",
+    "typescript": "^5.9.3",
+    "vitest": "4.1.12",
+    "wrangler": "4.151.3"
+  }
+}

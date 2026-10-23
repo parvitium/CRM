@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Parvitium">
+  <rect width="32" height="32" rx="7" fill="#2f4a3c"/>
+  <rect x="0" y="26" width="32" height="6" fill="#9a4a24"/>
+  <path fill="#f4efe4" d="M9 6h10.2c3.6 0 6.3 2.2 6.3 5.6 0 3.5-2.7 5.7-6.4 5.7H13.2V26H9V6zm4.2 3.4v4.6h5.7c1.7 0 2.7-1 2.7-2.3s-1-2.3-2.7-2.3h-5.7z"/>
+</svg>
