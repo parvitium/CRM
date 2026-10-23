@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { commitTicketWrite, createTicket, getTicket, transitionTicket } from "../../src/db/queries";
 import { EMAILS, USER_IDS } from "../../src/ids";
-import { hiddenInput, json, login, seedSql, workerFetch } from "../helpers";
+import { hiddenInput, json, localUrl, login, seedSql, workerFetch } from "../helpers";
 
 describe("ticket workflow", () => {
   beforeAll(async () => {
@@ -225,7 +225,7 @@ describe("ticket workflow", () => {
       method: "POST",
       body: { title: "Board stay put", type: "task" },
     });
-    const board = await workerFetch("https://crm.test/admin/tickets", {
+    const board = await workerFetch(localUrl("/admin/tickets"), {
       headers: { Cookie: adam.cookie },
     });
     const html = await board.text();
@@ -237,7 +237,7 @@ describe("ticket workflow", () => {
     expect(html).toContain(`aria-label="Go, move Board stay put"`);
     expect(html).toContain(`<span class="visually-hidden">Move Board stay put to</span>`);
 
-    const moved = await workerFetch(`https://crm.test/admin/tickets/${created.body.id}/transition`, {
+    const moved = await workerFetch(localUrl(`/admin/tickets/${created.body.id}/transition`), {
       method: "POST",
       headers: {
         Cookie: adam.cookie,
@@ -249,7 +249,7 @@ describe("ticket workflow", () => {
     expect(moved.status).toBe(302);
     expect(moved.headers.get("Location")).toMatch(/\/admin\/tickets\?notice=Moved#ready$/);
 
-    const detail = await workerFetch(`https://crm.test/admin/tickets/${created.body.id}`, {
+    const detail = await workerFetch(localUrl(`/admin/tickets/${created.body.id}`), {
       headers: { Cookie: adam.cookie },
     });
     const detailHtml = await detail.text();

@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { PACKAGE_IDS, EMAILS } from "../../src/ids";
-import { hiddenInput, json, login, seedSql, workerFetch } from "../helpers";
+import { hiddenInput, json, localUrl, login, seedSql, workerFetch } from "../helpers";
 
 describe("admin customers", () => {
   beforeAll(async () => {
@@ -9,7 +9,7 @@ describe("admin customers", () => {
 
   it("creates a TooeleTrades listing with a catalog package", async () => {
     const adam = await login(EMAILS.adam);
-    const page = await workerFetch("https://crm.test/admin/customers", {
+    const page = await workerFetch(localUrl("/admin/customers"), {
       headers: { Cookie: adam.cookie },
     });
     const html = await page.text();
@@ -18,7 +18,7 @@ describe("admin customers", () => {
     expect(html).toContain("$29.00/mo");
     expect(hiddenInput(html, "csrf")).toBe(adam.csrf);
 
-    const res = await workerFetch("https://crm.test/admin/customers", {
+    const res = await workerFetch(localUrl("/admin/customers"), {
       method: "POST",
       headers: {
         Cookie: adam.cookie,
@@ -51,7 +51,7 @@ describe("admin customers", () => {
 
   it("rejects a customer without a kind", async () => {
     const adam = await login(EMAILS.adam);
-    const res = await workerFetch("https://crm.test/admin/customers", {
+    const res = await workerFetch(localUrl("/admin/customers"), {
       method: "POST",
       headers: {
         Cookie: adam.cookie,

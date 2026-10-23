@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { listSocialAccounts } from "../../src/db/queries";
 import { CUSTOMER_IDS, EMAILS } from "../../src/ids";
-import { json, login, seedSql, workerFetch } from "../helpers";
+import { json, localUrl, login, seedSql, workerFetch } from "../helpers";
 
 describe("admin-only access", () => {
   beforeAll(async () => {
@@ -12,7 +12,7 @@ describe("admin-only access", () => {
   it("has no customer portal routes", async () => {
     const adam = await login(EMAILS.adam);
     for (const path of ["/portal", "/portal/package", "/api/portal/overview"]) {
-      const res = await workerFetch(`https://crm.test${path}`, {
+      const res = await workerFetch(localUrl(path), {
         headers: { Cookie: adam.cookie, Accept: "application/json" },
         redirect: "manual",
       });
@@ -49,7 +49,7 @@ describe("admin-only access", () => {
 
   it("shows 1Password pointers only in admin social records, never passwords", async () => {
     const adam = await login(EMAILS.adam);
-    const page = await workerFetch(`https://crm.test/admin/customers/${CUSTOMER_IDS.summit}`, {
+    const page = await workerFetch(localUrl(`/admin/customers/${CUSTOMER_IDS.summit}`), {
       headers: { Cookie: adam.cookie },
     });
     const html = await page.text();
@@ -71,7 +71,7 @@ describe("admin-only access", () => {
   });
 
   it("rejects a customer-looking email on local dev login", async () => {
-    const res = await workerFetch("https://crm.test/auth/dev-login", {
+    const res = await workerFetch(localUrl("/auth/dev-login"), {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ email: "portal.summit@example.test" }).toString(),

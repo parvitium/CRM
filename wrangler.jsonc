@@ -36,7 +36,10 @@
     "APP_NAME": "Parvitium CRM",
     "AUTH_MODE": "access",
     "ALLOW_DEV_LOGIN": "",
-    // Set at deploy. Empty here so local/dev login can run without Access.
+    // Fail closed: empty team/AUD with AUTH_MODE=access (the committed
+    // default) makes every /admin and /api route return 403. Set these at
+    // deploy. Local wrangler dev uses AUTH_MODE=dev in .dev.vars — never
+    // treat empty Access vars as permission to use cookie sessions.
     "CF_ACCESS_TEAM_DOMAIN": "",
     "CF_ACCESS_AUD": "",
   },

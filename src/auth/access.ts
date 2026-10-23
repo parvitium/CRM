@@ -7,6 +7,7 @@ export const ACCESS_JWT_HEADER = "Cf-Access-Jwt-Assertion";
 
 export type AccessBindings = {
   AUTH_MODE?: string;
+  ALLOW_DEV_LOGIN?: string;
   CF_ACCESS_TEAM_DOMAIN?: string;
   CF_ACCESS_AUD?: string;
 };
@@ -63,18 +64,62 @@ export function accessIssuer(teamDomain: string): string {
   return `https://${normalizeTeamDomain(teamDomain)}`;
 }
 
+export function authMode(env: AccessBindings): string {
+  return String(env.AUTH_MODE ?? "").trim().toLowerCase();
+}
+
 export function isAccessAuthMode(mode: string | undefined): boolean {
   return String(mode ?? "").trim().toLowerCase() === "access";
 }
 
-/** Production Access identity is used only when mode, team domain, and AUD are all set. */
-export function isAccessConfigured(env: AccessBindings): boolean {
-  if (!isAccessAuthMode(env.AUTH_MODE)) {
+export function isDevAuthMode(env: AccessBindings): boolean {
+  return authMode(env) === "dev";
+}
+
+export function isLoopbackHost(requestUrl: string): boolean {
+  try {
+    const hostname = new URL(requestUrl).hostname.toLowerCase();
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
+  } catch {
     return false;
   }
-  const teamDomain = String(env.CF_ACCESS_TEAM_DOMAIN ?? "").trim();
-  const aud = String(env.CF_ACCESS_AUD ?? "").trim();
+}
+
+/** Cookie /dev-login auth: AUTH_MODE=dev AND the request host is loopback. Never production. */
+export function isLocalDevAuth(env: AccessBindings, requestUrl: string): boolean {
+  return isDevAuthMode(env) && isLoopbackHost(requestUrl);
+}
+
+/** Local form login: AUTH_MODE=dev, loopback host, and ALLOW_DEV_LOGIN=true. */
+export function isDevLoginAllowed(env: AccessBindings, requestUrl: string): boolean {
+  return isLocalDevAuth(env, requestUrl) && String(env.ALLOW_DEV_LOGIN ?? "").trim() === "true";
+}
+
+export function accessAudience(env: AccessBindings): { teamDomain: string; aud: string } {
+  return {
+    teamDomain: String(env.CF_ACCESS_TEAM_DOMAIN ?? "").trim(),
+    aud: String(env.CF_ACCESS_AUD ?? "").trim(),
+  };
+}
+
+/** Team domain + AUD are both set. Does not imply the request is allowed to use cookies. */
+export function isAccessReady(env: AccessBindings): boolean {
+  const { teamDomain, aud } = accessAudience(env);
   return Boolean(teamDomain && aud);
+}
+
+/** Access JWT is required unless this request is explicit local-dev. */
+export function mustUseAccess(env: AccessBindings, requestUrl: string): boolean {
+  return !isLocalDevAuth(env, requestUrl);
+}
+
+export function isAccessMisconfigured(env: AccessBindings, requestUrl: string): boolean {
+  return mustUseAccess(env, requestUrl) && !isAccessReady(env);
+}
+
+/** @deprecated Use isAccessReady + mustUseAccess. Kept for call sites that meant "JWT path is live". */
+export function isAccessConfigured(env: AccessBindings): boolean {
+  return isAccessAuthMode(env.AUTH_MODE) && isAccessReady(env);
 }
 
 /**
@@ -87,11 +132,10 @@ export async function loadActorFromAccess(
   request: Request,
   env: AccessBindings,
 ): Promise<Actor | null> {
-  if (!isAccessConfigured(env)) {
+  if (!isAccessReady(env)) {
     return null;
   }
-  const teamDomain = String(env.CF_ACCESS_TEAM_DOMAIN ?? "").trim();
-  const aud = String(env.CF_ACCESS_AUD ?? "").trim();
+  const { teamDomain, aud } = accessAudience(env);
   const jwt = request.headers.get(ACCESS_JWT_HEADER)?.trim();
   if (!jwt) {
     return null;

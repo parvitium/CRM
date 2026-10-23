@@ -17,7 +17,7 @@ export default defineConfig(async () => {
             TEST_MIGRATIONS: migrations,
             TEST_SEED: seed,
             ALLOW_DEV_LOGIN: "true",
-            AUTH_MODE: "access",
+            AUTH_MODE: "dev",
             APP_NAME: "Parvitium CRM",
             CF_ACCESS_TEAM_DOMAIN: "",
             CF_ACCESS_AUD: "",

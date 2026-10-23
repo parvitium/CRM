@@ -43,8 +43,19 @@ function splitSql(sql: string): string[] {
   return statements;
 }
 
+/**
+ * Cookie /dev-login only works on loopback with AUTH_MODE=dev.
+ * https://crm.test is treated as production (Access, fail closed).
+ */
+export const LOCAL_ORIGIN = "http://127.0.0.1:8787";
+export const LOCAL_HTTPS_ORIGIN = "https://localhost";
+
+export function localUrl(path: string, origin = LOCAL_ORIGIN): string {
+  return `${origin}${path}`;
+}
+
 export async function login(email: string): Promise<{ cookie: string; csrf: string }> {
-  const res = await workerFetch("https://crm.test/auth/dev-login", {
+  const res = await workerFetch(localUrl("/auth/dev-login"), {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ email }).toString(),
@@ -54,7 +65,7 @@ export async function login(email: string): Promise<{ cookie: string; csrf: stri
   if (!cookie) {
     throw new Error(`dev login failed for ${email}: ${res.status}`);
   }
-  const me = await workerFetch("https://crm.test/api/me", {
+  const me = await workerFetch(localUrl("/api/me"), {
     headers: { Cookie: cookie, Accept: "application/json" },
   });
   const body = (await me.json()) as { csrf?: string };
@@ -158,7 +169,7 @@ export async function json<T>(
   if (opts.body !== undefined) {
     headers["Content-Type"] = "application/json";
   }
-  const res = await workerFetch(`https://crm.test${path}`, {
+  const res = await workerFetch(localUrl(path), {
     method: opts.method ?? "GET",
     headers,
     body: opts.body === undefined ? undefined : JSON.stringify({ ...opts.body, csrf: opts.csrf }),

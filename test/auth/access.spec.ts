@@ -3,6 +3,10 @@ import { env } from "cloudflare:workers";
 import {
   ACCESS_EMAIL_HEADER,
   ACCESS_JWT_HEADER,
+  isAccessMisconfigured,
+  isDevLoginAllowed,
+  isLocalDevAuth,
+  isLoopbackHost,
   loadActorFromAccess,
   resetAccessTestHooks,
   setAccessJwksFetcher,
@@ -25,6 +29,45 @@ const ACCESS_ENV = {
   CF_ACCESS_TEAM_DOMAIN: TEST_ACCESS_TEAM,
   CF_ACCESS_AUD: TEST_ACCESS_AUD,
 };
+
+describe("local-dev vs Access gates", () => {
+  it("treats only loopback hosts as local", () => {
+    expect(isLoopbackHost("http://127.0.0.1:8787/admin")).toBe(true);
+    expect(isLoopbackHost("https://localhost/login")).toBe(true);
+    expect(isLoopbackHost("http://[::1]/")).toBe(true);
+    expect(isLoopbackHost("https://crm.test/admin")).toBe(false);
+    expect(isLoopbackHost("https://parvitium-crm.workers.dev/")).toBe(false);
+  });
+
+  it("allows cookie auth only when AUTH_MODE=dev on loopback", () => {
+    const dev = { AUTH_MODE: "dev", ALLOW_DEV_LOGIN: "true" };
+    const access = { AUTH_MODE: "access", ALLOW_DEV_LOGIN: "true" };
+    expect(isLocalDevAuth(dev, "http://127.0.0.1:8787/")).toBe(true);
+    expect(isDevLoginAllowed(dev, "http://127.0.0.1:8787/")).toBe(true);
+    expect(isLocalDevAuth(dev, "https://crm.test/")).toBe(false);
+    expect(isDevLoginAllowed(dev, "https://crm.test/")).toBe(false);
+    expect(isLocalDevAuth(access, "http://127.0.0.1:8787/")).toBe(false);
+    expect(isDevLoginAllowed(access, "http://127.0.0.1:8787/")).toBe(false);
+  });
+
+  it("is misconfigured when Access is required but team or AUD is empty", () => {
+    const empty = { AUTH_MODE: "access", CF_ACCESS_TEAM_DOMAIN: "", CF_ACCESS_AUD: "" };
+    expect(isAccessMisconfigured(empty, "https://crm.test/api/me")).toBe(true);
+    expect(isAccessMisconfigured(empty, "http://127.0.0.1:8787/api/me")).toBe(true);
+    expect(
+      isAccessMisconfigured(
+        { AUTH_MODE: "dev", CF_ACCESS_TEAM_DOMAIN: "", CF_ACCESS_AUD: "" },
+        "https://crm.test/api/me",
+      ),
+    ).toBe(true);
+    expect(
+      isAccessMisconfigured(
+        { AUTH_MODE: "dev", CF_ACCESS_TEAM_DOMAIN: "", CF_ACCESS_AUD: "" },
+        "http://127.0.0.1:8787/api/me",
+      ),
+    ).toBe(false);
+  });
+});
 
 describe("Cloudflare Access JWT", () => {
   beforeAll(async () => {

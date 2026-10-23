@@ -1,6 +1,6 @@
 import { createMiddleware } from "hono/factory";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { isAccessConfigured, loadActorFromAccess } from "../auth/access";
+import { isAccessMisconfigured, isLocalDevAuth, loadActorFromAccess } from "../auth/access";
 import {
   clearSessionCookies,
   createSession,
@@ -19,6 +19,10 @@ export function isHealthPath(path: string): boolean {
   return path === "/health" || path === "/health/";
 }
 
+export function isProtectedDeskPath(path: string): boolean {
+  return path === "/admin" || path.startsWith("/admin/") || path === "/api" || path.startsWith("/api/");
+}
+
 export const sessionMiddleware = createMiddleware<AppEnv>(async (c, next) => {
   // Health is public and must never mint or bind a session, even if Access headers are present.
   if (isHealthPath(c.req.path)) {
@@ -29,12 +33,26 @@ export const sessionMiddleware = createMiddleware<AppEnv>(async (c, next) => {
     return;
   }
 
-  const accessConfigured = isAccessConfigured(c.env);
-  const accessActor = await loadActorFromAccess(c.env.DB, c.req.raw, c.env);
-  const cookieSession = accessConfigured
-    ? null
-    : await loadActorFromCookie(c.env.DB, c.req.header("Cookie") ?? null);
+  const localDev = isLocalDevAuth(c.env, c.req.url);
 
+  if (localDev) {
+    const cookieSession = await loadActorFromCookie(c.env.DB, c.req.header("Cookie") ?? null);
+    if (cookieSession) {
+      c.set("actor", cookieSession.actor);
+      c.set("csrfToken", cookieSession.csrfToken);
+      c.set("sessionId", cookieSession.sessionId);
+    } else {
+      c.set("actor", null);
+      c.set("csrfToken", null);
+      c.set("sessionId", null);
+    }
+    await next();
+    return;
+  }
+
+  // AUTH_MODE=access, or any non-loopback host: identity comes from a verified JWT only.
+  // Leftover /dev-login cookies are ignored. Missing team/AUD is handled by fail-closed middleware.
+  const accessActor = await loadActorFromAccess(c.env.DB, c.req.raw, c.env);
   if (accessActor) {
     const existing = await loadActorFromCookie(c.env.DB, c.req.header("Cookie") ?? null);
     if (existing && existing.actor.id === accessActor.id) {
@@ -48,16 +66,20 @@ export const sessionMiddleware = createMiddleware<AppEnv>(async (c, next) => {
       c.set("csrfToken", created.csrfToken);
       c.set("sessionId", created.sessionId);
     }
-  } else if (cookieSession) {
-    c.set("actor", cookieSession.actor);
-    c.set("csrfToken", cookieSession.csrfToken);
-    c.set("sessionId", cookieSession.sessionId);
   } else {
     c.set("actor", null);
     c.set("csrfToken", null);
     c.set("sessionId", null);
   }
 
+  await next();
+});
+
+/** Admin and API never fall through to cookies when Access is required but unconfigured. */
+export const failClosedAccessMiddleware = createMiddleware<AppEnv>(async (c, next) => {
+  if (isProtectedDeskPath(c.req.path) && isAccessMisconfigured(c.env, c.req.url)) {
+    throw new HttpError(403, "Cloudflare Access is not configured");
+  }
   await next();
 });
 

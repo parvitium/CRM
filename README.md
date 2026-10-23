@@ -18,7 +18,7 @@ Cloudflare Access  (crm.parvitium.com)
 Cloudflare Worker  (Hono)
   ├─ HTML pages (Hono JSX) + /styles.css
   ├─ JSON /api/admin/*
-  ├─ Auth: Access JWT → admin user; local ALLOW_DEV_LOGIN only
+  ├─ Auth: Access JWT → admin user; local AUTH_MODE=dev + loopback only
   └─ Adapter ports (Stripe, GBP, SEO, Retell, reviews, email)
         │
         ▼
@@ -52,7 +52,7 @@ npm run db:seed:local
 npm run dev
 ```
 
-Open [http://127.0.0.1:8787](http://127.0.0.1:8787). With `ALLOW_DEV_LOGIN=true` in `.dev.vars`, sign in as `adam@parvitium.example`.
+Open [http://127.0.0.1:8787](http://127.0.0.1:8787). `.dev.vars` must set `AUTH_MODE=dev` and `ALLOW_DEV_LOGIN=true`. Sign in as `adam@parvitium.example`. Host must be loopback — cookie login is refused on any other hostname, and `AUTH_MODE=access` (the committed default) fail-closes `/admin` and `/api` until Access vars are set.
 
 ### Checks
 
@@ -69,7 +69,7 @@ CI runs the same three commands. There is **no deploy job**.
 - **Operator:** Adam only (`users.role = 'admin'`). No customer users.
 - **Production:** Cloudflare Access in front of `crm.parvitium.com`. The Worker validates `Cf-Access-Jwt-Assertion` against the team JWKS (`CF_ACCESS_TEAM_DOMAIN` + `CF_ACCESS_AUD`). The spoofable `Cf-Access-Authenticated-User-Email` header is ignored. Setup steps: [docs/cloudflare-access.md](docs/cloudflare-access.md).
 - **Session:** random token, SHA-256 stored in `sessions` (CSRF). On HTTPS the cookie is `__Host-pv_session` (`Secure`, `Path=/`, no `Domain`, `HttpOnly`, `SameSite=Lax`). **Dev fallback:** local `wrangler dev` is `http://127.0.0.1`, so HTTP uses `pv_session` without `Secure`.
-- **Dev login:** only when `ALLOW_DEV_LOGIN=true` (`.dev.vars` / CI). Production `wrangler.jsonc` sets this to empty. When Access is configured, a leftover session cookie is not enough — a valid JWT is required.
+- **Dev login:** only when `AUTH_MODE=dev`, the request host is loopback, and `ALLOW_DEV_LOGIN=true` (`.dev.vars` / tests). Committed `wrangler.jsonc` is `AUTH_MODE=access` with empty team/AUD — that **fails closed** (403 on `/admin` and `/api`). `AUTH_MODE=access` returns 404 for `/auth/dev-login`. A leftover session cookie is never enough; a valid JWT is required whenever Access is in force.
 - **CSRF:** required on authenticated POSTs and logout (`csrf` form field or `X-CSRF-Token`). Comparison is constant-time with no length short-circuit. Logout is POST only.
 - **Security headers:** every response gets CSP (`frame-ancestors 'none'`), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, and HSTS on HTTPS.
 
@@ -126,7 +126,7 @@ Nothing in this repo should create Cloudflare resources or ship to production by
 1. **Create the D1 database** — `wrangler d1 create parvitium-crm` (Adam, when ready). Copy the returned UUID.
 2. **Set its id** — replace the placeholder `database_id` in `wrangler.jsonc` with that UUID. Leave the placeholder in git until then.
 3. **Run migrations** — `wrangler d1 migrations apply parvitium-crm` against the remote DB (after the real id is set). Then seed only if you intend to.
-4. **Access setup** — follow [docs/cloudflare-access.md](docs/cloudflare-access.md). Set `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`. Put `crm.parvitium.com` behind an Allow policy for Adam’s email. Keep `ALLOW_DEV_LOGIN` empty. Insert the real Access email as the admin user (seed email is fictional).
+4. **Access setup** — follow [docs/cloudflare-access.md](docs/cloudflare-access.md). Set `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`. Put `crm.parvitium.com` behind an Allow policy for Adam’s email. Keep `AUTH_MODE=access` and `ALLOW_DEV_LOGIN` empty. Insert the real Access email as the admin user (seed email is fictional). Deploying without team/AUD leaves the desk 403 (fail closed), which is intentional.
 5. **Secrets** — `wrangler secret put` for anything that is not a committed var. Never put secrets in `wrangler.jsonc` or git.
 6. **Then** deploy — `wrangler deploy` only after 1–5. Do not deploy with the placeholder D1 id.
 

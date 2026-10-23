@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { isAccessConfigured } from "../auth/access";
+import { isDevAuthMode, isDevLoginAllowed, isLoopbackHost } from "../auth/access";
 import { createSession, sessionCookie } from "../auth/session";
 import type { AppEnv } from "../app-env";
 import { findUserByEmail, listKnownDevLogins } from "../db/queries";
@@ -14,7 +14,7 @@ authRoutes.get("/login", async (c) => {
   if (actor) {
     return c.redirect("/admin");
   }
-  const allowDevLogin = String(c.env.ALLOW_DEV_LOGIN) === "true";
+  const allowDevLogin = isDevLoginAllowed(c.env, c.req.url);
   const users = allowDevLogin ? (await listKnownDevLogins(c.env.DB)).results : [];
   return c.html(
     LoginPage({
@@ -29,7 +29,12 @@ authRoutes.get("/login", async (c) => {
 });
 
 authRoutes.post("/auth/dev-login", async (c) => {
-  if (String(c.env.ALLOW_DEV_LOGIN) !== "true" || isAccessConfigured(c.env)) {
+  // Production / AUTH_MODE=access: the route does not exist.
+  if (!isDevAuthMode(c.env)) {
+    throw new HttpError(404, "Not found");
+  }
+  // AUTH_MODE=dev still requires loopback + the explicit local flag.
+  if (!isLoopbackHost(c.req.url) || String(c.env.ALLOW_DEV_LOGIN ?? "").trim() !== "true") {
     throw new HttpError(403, "Dev login is disabled");
   }
   const form = await c.req.parseBody();

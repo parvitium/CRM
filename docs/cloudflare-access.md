@@ -4,6 +4,27 @@ Production hostname: **crm.parvitium.com** (proposed). The CRM is Adam-only. Acc
 
 Do not create the Access application, DNS record, or D1 database from this repo until you are ready to deploy.
 
+## Fail closed (read this first)
+
+Committed `wrangler.jsonc` is the **safe production default**:
+
+| Variable | Committed value | Meaning |
+| --- | --- | --- |
+| `AUTH_MODE` | `access` | JWT required. Cookie /dev-login is off, including on localhost. |
+| `CF_ACCESS_TEAM_DOMAIN` | empty | Must be set at deploy. |
+| `CF_ACCESS_AUD` | empty | Must be set at deploy. Empty AUD is never treated as “skip Access”. |
+| `ALLOW_DEV_LOGIN` | empty | Ignored unless `AUTH_MODE=dev` **and** the request host is loopback. |
+
+If `AUTH_MODE=access` (or the request is not local-dev) and team domain or AUD is missing, **every `/admin` and `/api` route returns 403**. The Worker does not fall through to cookie sessions, leftover `__Host-pv_session` / `pv_session` cookies, or `ALLOW_DEV_LOGIN`.
+
+Local-dev cookie auth is allowed only when **all** of these are true:
+
+1. `AUTH_MODE=dev` (`.dev.vars` only — never the committed config)
+2. Request hostname is `localhost`, `127.0.0.1`, or `::1`
+3. `ALLOW_DEV_LOGIN=true`
+
+`AUTH_MODE=access` refuses `POST /auth/dev-login` with **404** even on loopback. `AUTH_MODE=dev` on a non-loopback host (`crm.test`, `workers.dev`, the production hostname) refuses it with **403**, and admin/API still fail closed if Access vars are empty.
+
 ## 1. Custom domain
 
 1. In **Workers & Pages** → this Worker → **Settings** → **Domains & Routes**.
@@ -49,13 +70,16 @@ If the JWT is valid but the email is not in `users`, the response is **403**. Se
 
 ## 4. Local development
 
-Access does not run in `wrangler dev` unless you paste a real team domain and AUD. Local work uses `.dev.vars`:
+Access does not run in `wrangler dev` unless you paste a real team domain and AUD. Copy `.dev.vars.example` to `.dev.vars`:
 
 ```
+AUTH_MODE=dev
 ALLOW_DEV_LOGIN=true
 ```
 
-That flag is empty in committed `wrangler.jsonc`. Never enable it in production.
+Open [http://127.0.0.1:8787](http://127.0.0.1:8787). Host must be loopback. Do not point a custom hostname at the local Worker and expect cookie login.
+
+Never set `AUTH_MODE=access` in `.dev.vars` without both Access vars. Never enable `ALLOW_DEV_LOGIN` on the deployed Worker.
 
 ## 5. Sign-out
 

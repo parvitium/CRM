@@ -27,11 +27,12 @@ Handwritten spec (transcribed) lives in the original issue. Scope is the foundat
 ## Auth
 
 - Cloudflare Access is production auth. Validate `Cf-Access-Jwt-Assertion` against the team JWKS (`CF_ACCESS_TEAM_DOMAIN` + `CF_ACCESS_AUD`). Ignore `Cf-Access-Authenticated-User-Email`. See `docs/cloudflare-access.md`.
-- When Access is configured, a missing/invalid JWT is unauthenticated even if a leftover session cookie is present. A verified JWT whose email is not an admin user is 403.
+- Committed `wrangler.jsonc` is `AUTH_MODE=access` with empty team/AUD. That package **fails closed**: every `/admin` and `/api` route returns 403. It never falls through to cookie sessions.
+- Cookie sessions and `POST /auth/dev-login` work only when `AUTH_MODE=dev` **and** the request host is loopback (`localhost` / `127.0.0.1` / `::1`) **and** `ALLOW_DEV_LOGIN=true`. `AUTH_MODE=access` returns 404 for `/auth/dev-login` even on localhost. A leftover `pv_session` cookie is ignored whenever Access is required.
+- When Access vars are set, a missing/invalid JWT is unauthenticated even if a leftover session cookie is present. A verified JWT whose email is not an admin user is 403.
 - `users` is admin-only. Identity email from the JWT must match `users.email`.
 - Sessions exist so CSRF tokens have somewhere to live. Store `sha256(token)` only. HTTPS cookie is `__Host-pv_session` (Secure, Path=/, no Domain, HttpOnly, SameSite=Lax). HTTP `wrangler dev` fallback is `pv_session` without Secure.
 - No magic links. No customer users. No homegrown customer auth.
-- `ALLOW_DEV_LOGIN=true` is local/test only. Production vars leave it empty.
 - CSRF on authenticated POSTs and logout (POST only). Compare constant-time with no length short-circuit.
 - Security headers on every response: CSP (`frame-ancestors`), `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, HSTS on HTTPS.
 - `/health` and `/health/` never mint a session.
@@ -93,6 +94,9 @@ Logic lives in `src/domain/tickets.ts` so HTTP handlers stay thin.
 
 - Anonymous requests cannot hit `/admin` or `/api/admin/*`
 - `/portal` and `/api/portal/*` are 404
+- Empty team/AUD with `AUTH_MODE=access` (or any non-local host) returns 403 on `/admin` and `/api`
+- `/auth/dev-login` is 404 in `AUTH_MODE=access` and 403 on non-loopback hosts
+- Leftover dev session cookies are rejected in `AUTH_MODE=access`
 - Access email header alone never authenticates
 - Verified Access JWT maps to admin; unknown email is 403
 - Configured Access ignores leftover session cookies without a JWT

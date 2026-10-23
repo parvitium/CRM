@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import { createAdapters } from "./adapters";
 import type { AppEnv } from "./app-env";
-import { csrfMiddleware, handleError, sessionMiddleware } from "./middleware/auth";
+import { csrfMiddleware, failClosedAccessMiddleware, handleError, sessionMiddleware } from "./middleware/auth";
 import { mutableResponse, securityHeaders } from "./middleware/security";
 import { adminRoutes } from "./routes/admin";
 import { apiRoutes } from "./routes/api";
@@ -16,6 +16,7 @@ export function createApp() {
     await next();
   });
   app.use("*", sessionMiddleware);
+  app.use("*", failClosedAccessMiddleware);
   app.use("*", csrfMiddleware);
 
   const health = (c: Context<AppEnv>) => c.json({ ok: true, service: "parvitium-crm" });

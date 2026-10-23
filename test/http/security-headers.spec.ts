@@ -3,6 +3,8 @@ import { CONTENT_SECURITY_POLICY, HSTS_VALUE } from "../../src/middleware/securi
 import { EMAILS } from "../../src/ids";
 import {
   immutableAssetResponse,
+  LOCAL_HTTPS_ORIGIN,
+  localUrl,
   login,
   mockAssetsFetcher,
   seedSql,
@@ -42,7 +44,7 @@ describe("security headers", () => {
     expect(loginPage.status).toBe(200);
     expectCommonSecurityHeaders(loginPage);
 
-    const denied = await workerFetch("https://crm.test/api/me", {
+    const denied = await workerFetch(localUrl("/api/me"), {
       headers: { Accept: "application/json" },
     });
     expect(denied.status).toBe(401);
@@ -60,7 +62,7 @@ describe("security headers", () => {
 
   it("keeps headers on authenticated pages", async () => {
     const adam = await login(EMAILS.adam);
-    const page = await workerFetch("https://crm.test/admin", {
+    const page = await workerFetch(`${LOCAL_HTTPS_ORIGIN}/admin`, {
       headers: { Cookie: adam.cookie },
     });
     expect(page.status).toBe(200);

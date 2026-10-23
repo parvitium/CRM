@@ -23,7 +23,9 @@ export function LoginPage(props: {
         {props.allowDevLogin ? (
           <form class="stack muted-box" method="post" action="/auth/dev-login">
             <p class="kicker">Local / test only</p>
-            <p class="hint">ALLOW_DEV_LOGIN is on. Production vars leave this empty.</p>
+            <p class="hint">
+              Local-only: AUTH_MODE=dev, loopback host, ALLOW_DEV_LOGIN=true. Production is AUTH_MODE=access.
+            </p>
             <label>
               Dev user
               <select name="email" required>
