@@ -1,0 +1,88 @@
+import type { Actor } from "../domain/authz";
+import type { Child } from "hono/jsx";
+
+type NavItem = { href: string; label: string };
+
+const ADMIN_NAV: NavItem[] = [
+  { href: "/admin", label: "Dashboard" },
+  { href: "/admin/customers", label: "Customers" },
+  { href: "/admin/flags", label: "Flags" },
+  { href: "/admin/tickets", label: "Tickets" },
+  { href: "/admin/history", label: "Dev history" },
+  { href: "/admin/templates", label: "Templates" },
+];
+
+export function Layout(props: {
+  title: string;
+  actor: Actor | null;
+  path: string;
+  csrf?: string;
+  notice?: string | null;
+  error?: string | null;
+  children: Child;
+}) {
+  const items = props.actor ? ADMIN_NAV : [];
+  return (
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>{props.title} · Parvitium CRM</title>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="stylesheet" href="/styles.css" />
+      </head>
+      <body>
+        <header class="top">
+          <a class="mark" href={props.actor ? "/admin" : "/login"}>
+            <span class="mark-kicker">Parvitium</span>
+            <span class="mark-name">CRM</span>
+          </a>
+          {items.length > 0 ? (
+            <nav class="nav">
+              {items.map((item) => (
+                <a
+                  href={item.href}
+                  class={props.path === item.href || props.path.startsWith(`${item.href}/`) ? "on" : ""}
+                >
+                  {item.label}
+                </a>
+              ))}
+            </nav>
+          ) : null}
+          <div class="who">
+            {props.actor ? (
+              <>
+                <span>
+                  {props.actor.displayName}
+                  <small>admin</small>
+                </span>
+                <form method="post" action="/logout">
+                  <Csrf token={props.csrf ?? ""} />
+                  <button class="text-btn" type="submit">
+                    Sign out
+                  </button>
+                </form>
+              </>
+            ) : (
+              <a href="/login">Sign in</a>
+            )}
+          </div>
+        </header>
+        <main class="page">
+          {props.notice ? <p class="banner ok">{props.notice}</p> : null}
+          {props.error ? <p class="banner bad">{props.error}</p> : null}
+          {props.children}
+        </main>
+      </body>
+    </html>
+  );
+}
+
+export function Csrf(props: { token: string }) {
+  return <input type="hidden" name="csrf" value={props.token} />;
+}
+
+export function Empty(props: { children: Child }) {
+  return <p class="empty">{props.children}</p>;
+}

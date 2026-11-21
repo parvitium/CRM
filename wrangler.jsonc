@@ -1,0 +1,48 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "parvitium-crm",
+  "main": "src/index.ts",
+  "upload_source_maps": true,
+  "compatibility_date": "2026-10-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "head_sampling_rate": 1,
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.01,
+    },
+  },
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "parvitium-crm",
+      // PLACEHOLDER. Do not deploy with this UUID.
+      // Pre-deploy: wrangler d1 create parvitium-crm → paste the real
+      // database_id here → wrangler d1 migrations apply parvitium-crm.
+      // Do not omit this field — Wrangler may auto-provision a remote DB.
+      "database_id": "00000000-0000-4000-8000-000000000001",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "vars": {
+    "APP_NAME": "Parvitium CRM",
+    "AUTH_MODE": "access",
+    "ALLOW_DEV_LOGIN": "",
+    // Fail closed: empty team/AUD with AUTH_MODE=access (the committed
+    // default) makes every /admin and /api route return 403. Set these at
+    // deploy. Local wrangler dev uses AUTH_MODE=dev in .dev.vars — never
+    // treat empty Access vars as permission to use cookie sessions.
+    "CF_ACCESS_TEAM_DOMAIN": "",
+    "CF_ACCESS_AUD": "",
+  },
+  // R2 for call recordings is planned, not bound yet:
+  // "r2_buckets": [{ "binding": "RECORDINGS", "bucket_name": "parvitium-crm-recordings" }]
+}

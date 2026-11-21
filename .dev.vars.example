@@ -1,0 +1,14 @@
+# Copy to .dev.vars for local `wrangler dev`. Never commit .dev.vars.
+#
+# Cookie sessions and /auth/dev-login work only when ALL of these are true:
+#   AUTH_MODE=dev, request host is localhost/127.0.0.1, ALLOW_DEV_LOGIN=true.
+# Committed wrangler.jsonc is AUTH_MODE=access (fail closed). AUTH_MODE=access
+# disables /auth/dev-login even on loopback. Missing team/AUD then 403s /admin
+# and /api — it never falls through to cookies.
+AUTH_MODE=dev
+ALLOW_DEV_LOGIN=true
+
+# Leave Access vars empty locally unless you are testing JWT verification
+# against a real team JWKS. Do not set AUTH_MODE=access here without both.
+# CF_ACCESS_TEAM_DOMAIN=https://<team>.cloudflareaccess.com
+# CF_ACCESS_AUD=
